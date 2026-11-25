@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   agruparPorDia,
+  expandirRecorrentes,
+  fimAoCancelar,
+  somarMes,
   filtrarPorCategoria,
   hojeISO,
   lerValor,
@@ -70,5 +73,58 @@ describe("filtro, dias e ano", () => {
     const anos = totaisDoAno(gastos, 2026);
     expect(anos[10]).toBe(1950);
     expect(anos.reduce((s, v) => s + v, 0)).toBe(1950);
+  });
+});
+
+describe("recorrentes", () => {
+  const regra = {
+    id: "r1",
+    valor: 5590,
+    descricao: "Netflix",
+    categoria: "assinaturas",
+    dia: 31,
+    inicio: "2026-10",
+    fim: null,
+    pulados: ["2026-12"],
+  };
+
+  it("preenche do mês de início em diante, sem data final", () => {
+    expect(expandirRecorrentes([regra], 2026).map((g) => g.data)).toEqual(["2026-10-31", "2026-11-30"]);
+    expect(expandirRecorrentes([regra], 2027)).toHaveLength(12);
+  });
+  it("dia 31 vira o último dia do mês, inclusive em fevereiro", () => {
+    const fev = expandirRecorrentes([regra], 2027).find((g) => g.data.startsWith("2027-02"));
+    expect(fev.data).toBe("2027-02-28");
+  });
+  it("encerrada para depois do mês de fim; meses pulados não aparecem", () => {
+    const meses = expandirRecorrentes([{ ...regra, fim: "2027-03" }], 2027).map((g) => g.data.slice(0, 7));
+    expect(meses).toEqual(["2027-01", "2027-02", "2027-03"]);
+  });
+  it("cada ocorrência aponta para a regra e entra nas somas como gasto comum", () => {
+    const [out] = expandirRecorrentes([regra], 2026);
+    expect(out).toMatchObject({ recorrenteId: "r1", valor: 5590, categoria: "assinaturas" });
+    expect(totaisDoAno(expandirRecorrentes([regra], 2026), 2026)[10]).toBe(5590);
+  });
+});
+
+describe("cancelar recorrente", () => {
+  const regra = { dia: 25, inicio: "2026-09" };
+
+  it("cobrança do mês já caiu: o mês atual fica", () => {
+    expect(fimAoCancelar(regra, "2026-11-25")).toBe("2026-11");
+  });
+  it("cobrança do mês ainda vai cair: para já no mês anterior", () => {
+    expect(fimAoCancelar(regra, "2026-11-10")).toBe("2026-10");
+  });
+  it("nunca foi cobrada: null (apagar)", () => {
+    expect(fimAoCancelar({ dia: 25, inicio: "2026-11" }, "2026-11-10")).toBeNull();
+    expect(fimAoCancelar({ dia: 5, inicio: "2027-01" }, "2026-11-25")).toBeNull();
+  });
+  it("dia 31 em mês de 30 dias conta como dia 30", () => {
+    expect(fimAoCancelar({ dia: 31, inicio: "2026-01" }, "2026-11-30")).toBe("2026-11");
+  });
+  it("somarMes atravessa o ano", () => {
+    expect(somarMes("2026-12", 1)).toBe("2027-01");
+    expect(somarMes("2027-01", -1)).toBe("2026-12");
   });
 });

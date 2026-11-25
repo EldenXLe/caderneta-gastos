@@ -786,3 +786,182 @@ p {
     transition: none !important;
   }
 }
+
+/* Cobranças recorrentes */
+.repetir {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed var(--linha);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.repetir:hover {
+  border-color: var(--tinta);
+}
+.repetir:has(input:checked) {
+  border-style: solid;
+  border-color: var(--tinta);
+  background: var(--papel);
+}
+.repetir input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--tinta);
+  flex-shrink: 0;
+}
+.repetir > span {
+  display: grid;
+  gap: 2px;
+  font-size: 0.9rem;
+}
+.repetir .fraco {
+  font-size: 0.8rem;
+}
+
+.marca-recorrente {
+  color: var(--margem);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+/* Meses à frente: a cobrança já aparece, mas como previsão (lápis, não caneta). */
+.lancamento.previsto .descricao,
+.lancamento.previsto .valor {
+  color: var(--fraco);
+  font-style: italic;
+}
+
+.recorrentes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--linha);
+}
+.recorrentes li {
+  padding: 10px 0 10px 10px;
+  border-bottom: 1px solid var(--linha);
+}
+.recorrente-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.recorrentes li.cancelada .recorrente-nome {
+  color: var(--fraco);
+  text-decoration: line-through;
+}
+.pausas {
+  margin-top: 6px;
+  padding-left: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--fraco);
+}
+.pausa {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px dashed var(--linha);
+  border-radius: 6px;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  transition: border-color 0.15s;
+}
+.pausa:hover {
+  border-color: var(--tinta);
+}
+.confirmar {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 3px solid var(--erro);
+  background: color-mix(in srgb, var(--erro) 8%, var(--folha));
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.confirmar-acoes {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.botao-perigo {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--erro);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: filter 0.15s, transform 0.1s;
+}
+.botao-perigo:hover {
+  filter: brightness(1.1);
+}
+.botao-perigo:active {
+  transform: scale(0.98);
+}
+.botao-texto.neutro {
+  color: var(--tinta);
+}
+.dica {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--fraco);
+}
+.apagar.pular {
+  width: auto;
+  padding: 0 8px;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+.apagar.pular:hover {
+  color: var(--tinta);
+  background: color-mix(in srgb, var(--tinta) 10%, transparent);
+}
+.recorrente-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.recorrente-nome {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recorrente-info .fraco {
+  padding-left: 20px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+.recorrentes-vazio {
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.botao-texto {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--erro);
+  font-size: 0.82rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.botao-texto:hover {
+  background: color-mix(in srgb, var(--erro) 12%, transparent);
+}

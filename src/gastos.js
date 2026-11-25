@@ -6,6 +6,7 @@ export const CATEGORIAS = [
   { id: "casa", nome: "Casa e contas", cor: "#9a7426" },
   { id: "saude", nome: "Saúde", cor: "#c0392b" },
   { id: "lazer", nome: "Lazer", cor: "#b0417f" },
+  { id: "assinaturas", nome: "Assinaturas", cor: "#0e7c86" },
   { id: "outros", nome: "Outros", cor: "#6b7280" },
 ];
 
@@ -53,6 +54,50 @@ export function agruparPorDia(itens) {
     }
   }
   return grupos;
+}
+
+/**
+ * Cobranças recorrentes são guardadas como regra — { id, valor, descricao, categoria, dia,
+ * inicio: "AAAA-MM", fim: "AAAA-MM" | null, pulados: ["AAAA-MM"] } — e viram lançamentos
+ * só na hora de mostrar. Assim os meses seguintes se preenchem sozinhos, sem data final.
+ */
+export function expandirRecorrentes(recorrentes, ano) {
+  const lancamentos = [];
+  for (const r of recorrentes) {
+    for (let m = 1; m <= 12; m++) {
+      const mes = `${ano}-${String(m).padStart(2, "0")}`;
+      if (mes < r.inicio || (r.fim && mes > r.fim) || r.pulados.includes(mes)) continue;
+      // Dia 31 vira o último dia em meses mais curtos (30, 29 ou 28).
+      const dia = Math.min(r.dia, new Date(ano, m, 0).getDate());
+      lancamentos.push({
+        id: `${r.id}@${mes}`,
+        recorrenteId: r.id,
+        valor: r.valor,
+        descricao: r.descricao,
+        categoria: r.categoria,
+        data: `${mes}-${String(dia).padStart(2, "0")}`,
+        criadoEm: 0,
+      });
+    }
+  }
+  return lancamentos;
+}
+
+export function somarMes(mes, n) {
+  const [ano, m] = mes.split("-").map(Number);
+  return hojeISO(new Date(ano, m - 1 + n, 1)).slice(0, 7);
+}
+
+/**
+ * Último mês cobrado ao cancelar hoje. Se a cobrança deste mês já passou, ela fica;
+ * se ainda vai cair, o mês atual também sai. null = nunca houve cobrança (apagar a regra).
+ */
+export function fimAoCancelar(regra, hoje) {
+  const mesAtual = hoje.slice(0, 7);
+  const [ano, m] = mesAtual.split("-").map(Number);
+  const diaDaCobranca = Math.min(regra.dia, new Date(ano, m, 0).getDate());
+  const fim = diaDaCobranca <= Number(hoje.slice(8)) ? mesAtual : somarMes(mesAtual, -1);
+  return fim < regra.inicio ? null : fim;
 }
 
 /** Total de cada mês do ano, de janeiro (índice 0) a dezembro. */

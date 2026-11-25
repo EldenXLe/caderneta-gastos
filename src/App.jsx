@@ -2,21 +2,25 @@ import { useEffect, useState } from "react";
 import {
   CATEGORIAS,
   agruparPorDia,
+  expandirRecorrentes,
   filtrarPorCategoria,
+  fimAoCancelar,
   hojeISO,
   lerValor,
   nomeDoMes,
   reais,
   resumoDoMes,
+  somarMes,
   totaisDoAno,
 } from "./gastos";
 
 const CHAVE = "caderneta:gastos";
+const CHAVE_RECORRENTES = "caderneta:recorrentes";
 
 // shortcut: localStorage (~5 MB, uns 30 mil gastos); trocar por IndexedDB ao sincronizar com servidor.
-function carregar() {
+function carregar(chave) {
   try {
-    return JSON.parse(localStorage.getItem(CHAVE)) ?? [];
+    return JSON.parse(localStorage.getItem(chave)) ?? [];
   } catch {
     return [];
   }
@@ -66,7 +70,10 @@ const reaisCurto = (centavos) =>
     : (centavos / 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 
 export default function App() {
-  const [gastos, setGastos] = useState(carregar);
+  const [gastos, setGastos] = useState(() => carregar(CHAVE));
+  const [recorrentes, setRecorrentes] = useState(() => carregar(CHAVE_RECORRENTES));
+  const [repetir, setRepetir] = useState(false);
+  const [cancelando, setCancelando] = useState(null);
   const [mes, setMes] = useState(() => hojeISO().slice(0, 7));
   const [filtro, setFiltro] = useState(null);
   const [valor, setValor] = useState("");
@@ -80,8 +87,12 @@ export default function App() {
 
   const ano = Number(mes.slice(0, 4));
   const indiceMes = Number(mes.slice(5, 7)) - 1;
-  const totaisAno = totaisDoAno(gastos, ano);
-  const { itens, total } = resumoDoMes(gastos, mes);
+  const hoje = hojeISO();
+  const mesAtual = hoje.slice(0, 7);
+  const todos = [...gastos, ...expandirRecorrentes(recorrentes, ano)];
+  const totaisAno = totaisDoAno(todos, ano);
+  const { itens, total } = resumoDoMes(todos, mes);
+  const recorrentesVisiveis = recorrentes.filter((r) => !r.fim || r.fim >= mesAtual);
   const visiveis = filtrarPorCategoria(itens, filtro);
   const dias = agruparPorDia(visiveis);
   const totalFiltrado = visiveis.reduce((s, g) => s + g.valor, 0);
@@ -91,14 +102,21 @@ export default function App() {
   }));
   const nomeMes = nomeDoMes(mes).split(" ")[0].toLowerCase();
 
-  function guardar(novos) {
-    setGastos(novos);
+  function salvar(chave, valor) {
     try {
-      localStorage.setItem(CHAVE, JSON.stringify(novos));
+      localStorage.setItem(chave, JSON.stringify(valor));
       setFalhaAoSalvar(false);
     } catch {
       setFalhaAoSalvar(true);
     }
+  }
+  function guardar(novos) {
+    setGastos(novos);
+    salvar(CHAVE, novos);
+  }
+  function guardarRecorrentes(novas) {
+    setRecorrentes(novas);
+    salvar(CHAVE_RECORRENTES, novas);
   }
 
   function adicionar(e) {
@@ -108,16 +126,22 @@ export default function App() {
       setErro("Digite um valor maior que zero, como 12,50.");
       return;
     }
-    const novo = {
+    const base = {
       id: crypto.randomUUID(),
       valor: centavos,
       descricao: descricao.trim() || porId[categoria].nome,
       categoria,
-      data,
-      criadoEm: Date.now(),
     };
-    guardar([novo, ...gastos]);
+    if (repetir) {
+      guardarRecorrentes([
+        ...recorrentes,
+        { ...base, dia: Number(data.slice(8)), inicio: data.slice(0, 7), fim: null, pulados: [] },
+      ]);
+    } else {
+      guardar([{ ...base, data, criadoEm: Date.now() }, ...gastos]);
+    }
     setMes(data.slice(0, 7));
+    setRepetir(false);
     // O gasto novo precisa aparecer: se o filtro ativo o esconderia, o filtro sai.
     if (filtro && filtro !== categoria) setFiltro(null);
     setValor("");
@@ -125,7 +149,31 @@ export default function App() {
     setErro("");
   }
 
-  const remover = (id) => guardar(gastos.filter((x) => x.id !== id));
+  function remover(g) {
+    if (!g.recorrenteId) return guardar(gastos.filter((x) => x.id !== g.id));
+    // Numa cobrança recorrente, o × tira só aquele mês; a regra continua.
+    const mesDoItem = g.data.slice(0, 7);
+    guardarRecorrentes(
+      recorrentes.map((r) => (r.id === g.recorrenteId ? { ...r, pulados: [...r.pulados, mesDoItem] } : r)),
+    );
+  }
+
+  const mesPorExtenso = (m) => nomeDoMes(m).toLowerCase();
+  const atualizarRegra = (id, mudanca) =>
+    guardarRecorrentes(recorrentes.map((x) => (x.id === id ? { ...x, ...mudanca } : x)));
+
+  // Sem confirm(): navegadores embutidos e PWAs instalados podem bloquear a janela e responder "não" sozinhos.
+  function avisoDeCancelamento(r) {
+    const fim = fimAoCancelar(r, hoje);
+    if (!fim) return `Ainda não houve nenhuma cobrança de ${r.descricao}, então ela será apagada.`;
+    return `${nomeDoMes(fim)} fica no histórico. A partir de ${mesPorExtenso(somarMes(fim, 1))}, ${r.descricao} não aparece mais.`;
+  }
+
+  function cancelar(r) {
+    const fim = fimAoCancelar(r, hoje);
+    guardarRecorrentes(fim ? recorrentes.map((x) => (x.id === r.id ? { ...x, fim } : x)) : recorrentes.filter((x) => x.id !== r.id));
+    setCancelando(null);
+  }
   const irParaMes = (a, i) => setMes(`${a}-${String(i + 1).padStart(2, "0")}`);
 
   return (
@@ -233,6 +281,94 @@ export default function App() {
               ))}
             </ul>
           </section>
+
+          <section className="bloco" aria-labelledby="titulo-recorrentes">
+            <h2 id="titulo-recorrentes" className="rotulo">
+              Assinaturas e recorrentes
+            </h2>
+            {recorrentesVisiveis.length === 0 ? (
+              <p className="fraco recorrentes-vazio">
+                Marque “Repetir todo mês” ao anotar uma assinatura, e ela aparece aqui.
+              </p>
+            ) : (
+              <ul className="recorrentes">
+                {recorrentesVisiveis.map((r) => {
+                  const pausas = r.pulados.filter((p) => p >= mesAtual && (!r.fim || p <= r.fim)).sort();
+                  return (
+                    <li key={r.id} className={r.fim ? "cancelada" : ""} style={{ "--cor": porId[r.categoria].cor }}>
+                      <div className="recorrente-linha">
+                        <span className="recorrente-info">
+                          <span className="recorrente-nome">
+                            <span className="ponto" />
+                            {r.descricao}
+                          </span>
+                          <span className="fraco">
+                            {reais(r.valor)} ·{" "}
+                            {r.fim ? `cancelada · última em ${mesPorExtenso(r.fim)}` : `todo dia ${r.dia}`}
+                          </span>
+                        </span>
+                        {r.fim ? (
+                          <button type="button" className="botao-texto neutro" onClick={() => atualizarRegra(r.id, { fim: null })}>
+                            Desfazer
+                          </button>
+                        ) : (
+                          cancelando !== r.id && (
+                            <button
+                              type="button"
+                              className="botao-texto"
+                              onClick={() => setCancelando(r.id)}
+                              aria-label={`Cancelar assinatura ${r.descricao}`}
+                            >
+                              Cancelar
+                            </button>
+                          )
+                        )}
+                      </div>
+
+                      {pausas.length > 0 && (
+                        <p className="pausas">
+                          Pulada em{" "}
+                          {pausas.map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              className="pausa"
+                              onClick={() => atualizarRegra(r.id, { pulados: r.pulados.filter((x) => x !== p) })}
+                              title="Voltar a cobrar neste mês"
+                              aria-label={`Voltar a cobrar ${r.descricao} em ${mesPorExtenso(p)}`}
+                            >
+                              {MESES[Number(p.slice(5)) - 1]}/{p.slice(2, 4)} ↺
+                            </button>
+                          ))}
+                        </p>
+                      )}
+
+                      {cancelando === r.id && (
+                        <div className="confirmar" role="group" aria-label={`Cancelar ${r.descricao}`}>
+                          <p>
+                            <strong>Cancelar {r.descricao}?</strong> {avisoDeCancelamento(r)}
+                          </p>
+                          <div className="confirmar-acoes">
+                            <button type="button" className="botao-perigo" onClick={() => cancelar(r)}>
+                              Sim, cancelar
+                            </button>
+                            <button type="button" className="botao-contorno" onClick={() => setCancelando(null)}>
+                              Manter
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {recorrentesVisiveis.length > 0 && (
+              <p className="dica">
+                Para pausar um mês só, passe o mouse no lançamento e use <strong>pular mês</strong>.
+              </p>
+            )}
+          </section>
         </aside>
 
         <main className="folha" aria-labelledby="titulo-folha">
@@ -273,7 +409,12 @@ export default function App() {
                 </div>
                 <ul className="dia-itens">
                   {dia.itens.map((g) => (
-                    <li key={g.id} className="lancamento">
+                    <li key={g.id} className={`lancamento ${g.data > hoje ? "previsto" : ""}`}>
+                      {g.recorrenteId && (
+                        <span className="marca-recorrente" role="img" title="Cobrança recorrente" aria-label="Cobrança recorrente">
+                          ↻
+                        </span>
+                      )}
                       <span className="descricao">{g.descricao}</span>
                       <button
                         type="button"
@@ -288,11 +429,15 @@ export default function App() {
                       <span className="valor">{reais(g.valor)}</span>
                       <button
                         type="button"
-                        className="apagar"
-                        onClick={() => remover(g.id)}
-                        aria-label={`Apagar ${g.descricao}, ${reais(g.valor)}`}
+                        className={g.recorrenteId ? "apagar pular" : "apagar"}
+                        onClick={() => remover(g)}
+                        aria-label={
+                          g.recorrenteId
+                            ? `Pular ${g.descricao} só em ${nomeMes}`
+                            : `Apagar ${g.descricao}, ${reais(g.valor)}`
+                        }
                       >
-                        ×
+                        {g.recorrenteId ? "pular mês" : "×"}
                       </button>
                     </li>
                   ))}
@@ -349,6 +494,14 @@ export default function App() {
                 </label>
               ))}
             </fieldset>
+
+            <label className="repetir">
+              <input type="checkbox" checked={repetir} onChange={(e) => setRepetir(e.target.checked)} />
+              <span>
+                <strong>Repetir todo mês</strong>
+                <span className="fraco">Preenche os meses seguintes até você encerrar.</span>
+              </span>
+            </label>
 
             <div className="duas-colunas">
               <label className="campo">
