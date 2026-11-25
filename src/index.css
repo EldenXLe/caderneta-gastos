@@ -1,0 +1,788 @@
+/* Fontes servidas pelo próprio app (e guardadas pelo service worker), então abrem offline. */
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("@fontsource-variable/fraunces/files/fraunces-latin-opsz-normal.woff2") format("woff2-variations");
+}
+
+:root {
+  --papel: #f3eee2;
+  --folha: #fbf8f0;
+  --tinta: #1d2740;
+  --fraco: #6b6f7d;
+  --linha: #ddd5c4;
+  --pauta: #d6e0ee;
+  --margem: #e0634f;
+  --marca-texto: #ffe27a;
+  --erro: #b42318;
+  --ok: #2f7d55;
+  --serifa: "Fraunces", Georgia, serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --linha-pauta: 40px;
+  color-scheme: light;
+  font-family: var(--sans);
+  background: var(--papel);
+  color: var(--tinta);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --papel: #14161a;
+    --folha: #1b1e23;
+    --tinta: #ebe6da;
+    --fraco: #9a9ea8;
+    --linha: #2e323a;
+    --pauta: #252b35;
+    --margem: #d8665a;
+    --marca-texto: #6b5a12;
+    --erro: #ff8a7a;
+    --ok: #5cc493;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--papel);
+}
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 2px solid var(--tinta);
+  outline-offset: 2px;
+}
+h1,
+h2,
+p {
+  margin: 0;
+}
+.fraco {
+  color: var(--fraco);
+}
+
+.pagina {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 28px 32px 48px;
+}
+
+/* Cabeçalho */
+.cabecalho {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+.marca h1 {
+  font-family: var(--serifa);
+  font-size: 2.6rem;
+  font-weight: 600;
+  font-variation-settings: "opsz" 144;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.marca h1::after {
+  content: ".";
+  color: var(--margem);
+}
+.marca p {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--fraco);
+  letter-spacing: 0.02em;
+}
+.cabecalho-acoes {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.status {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--fraco);
+}
+.status::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: var(--ok);
+  vertical-align: 1px;
+}
+.status.off {
+  color: var(--tinta);
+}
+.status.off::before {
+  background: #e0a000;
+}
+.aviso {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-left: 3px solid var(--erro);
+  background: color-mix(in srgb, var(--erro) 10%, transparent);
+}
+
+/* Abas dos meses, como divisórias de caderno */
+.abas {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  border-bottom: 1px solid var(--linha);
+}
+.ano {
+  font-family: var(--mono);
+  font-weight: 500;
+  padding: 0 4px 12px;
+}
+.aba-ano {
+  align-self: center;
+  margin-bottom: 6px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--linha);
+  border-radius: 8px;
+  background: transparent;
+  font-size: 1.1rem;
+  transition: background 0.15s;
+}
+.aba-ano:hover {
+  background: var(--folha);
+}
+.abas ol {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 0 12px;
+  padding: 0;
+  list-style: none;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden; /* as abas descem 4px "para dentro" da folha; sem isso aparece barra vertical */
+  scrollbar-width: none;
+}
+.abas li {
+  flex: 1;
+  min-width: 64px;
+}
+.aba {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  padding: 10px 8px 8px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: color-mix(in srgb, var(--folha) 45%, transparent);
+  text-align: left;
+  transition: background 0.15s, transform 0.15s;
+  transform: translateY(4px);
+}
+.aba:hover {
+  background: var(--folha);
+  transform: translateY(1px);
+}
+.aba[aria-current="true"] {
+  background: var(--folha);
+  border-color: var(--linha);
+  transform: none;
+  position: relative;
+  margin-bottom: -1px;
+  padding-bottom: 9px;
+}
+.aba[aria-current="true"]::before {
+  content: "";
+  position: absolute;
+  inset: -1px -1px auto;
+  height: 3px;
+  border-radius: 10px 10px 0 0;
+  background: var(--margem);
+}
+.aba-nome {
+  font-family: var(--serifa);
+  font-weight: 600;
+  font-size: 1rem;
+}
+.aba-valor {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--fraco);
+  white-space: nowrap;
+}
+
+/* Grade principal */
+.grade {
+  display: grid;
+  grid-template-columns: 272px minmax(0, 1fr) 320px;
+  grid-template-areas: "resumo folha form";
+  gap: 28px;
+  padding-top: 28px;
+  align-items: start;
+}
+.resumo {
+  grid-area: resumo;
+  display: grid;
+  gap: 28px;
+}
+.folha {
+  grid-area: folha;
+}
+.lateral-form {
+  grid-area: form;
+  position: sticky;
+  top: 20px;
+}
+
+/* Resumo */
+.rotulo {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fraco);
+  margin-bottom: 8px;
+}
+.total {
+  font-family: var(--serifa);
+  font-size: 2.5rem;
+  font-weight: 600;
+  font-variation-settings: "opsz" 144;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.bloco > .fraco {
+  margin-top: 6px;
+  font-size: 0.9rem;
+}
+.barra-empilhada {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  margin-top: 16px;
+}
+.barra-empilhada span {
+  border-radius: 2px;
+  transition: opacity 0.2s, flex-grow 0.4s;
+}
+
+.filtros {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--linha);
+}
+.filtro {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 1px solid var(--linha);
+  background: transparent;
+  text-align: left;
+  transition: background 0.15s, padding 0.15s;
+}
+.filtro:hover {
+  background: color-mix(in srgb, var(--folha) 80%, transparent);
+  padding-left: 14px;
+}
+.filtro[aria-pressed="true"] {
+  background: var(--folha);
+  box-shadow: inset 3px 0 0 var(--cor, var(--tinta));
+  font-weight: 600;
+}
+.filtro.vazio .filtro-nome {
+  color: var(--fraco);
+}
+.filtro-nome {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ponto {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--cor);
+}
+.filtro-valor {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.filtro-valor small {
+  margin-left: 8px;
+  color: var(--fraco);
+}
+
+/* A folha pautada: 40px por linha, margem vermelha, e cada lançamento cai em cima de uma pauta */
+.folha {
+  --margem-x: 76px;
+  background:
+    linear-gradient(to right, transparent calc(var(--margem-x) - 1px), var(--margem) calc(var(--margem-x) - 1px) calc(var(--margem-x) + 1px), transparent calc(var(--margem-x) + 1px)),
+    repeating-linear-gradient(to bottom, transparent 0 calc(var(--linha-pauta) - 1px), var(--pauta) calc(var(--linha-pauta) - 1px) var(--linha-pauta)),
+    var(--folha);
+  border: 1px solid var(--linha);
+  border-radius: 4px 14px 14px 4px;
+  box-shadow: 0 1px 0 var(--linha), 0 18px 40px -28px rgb(0 0 0 / 0.35);
+  min-height: calc(var(--linha-pauta) * 14);
+  padding-bottom: var(--linha-pauta);
+}
+/* Duas linhas de pauta: o título e, abaixo dele, o carimbo do filtro ativo. */
+.folha-topo {
+  height: calc(var(--linha-pauta) * 2);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 24px 0 calc(var(--margem-x) + 20px);
+}
+.folha-topo h2 {
+  white-space: nowrap;
+  font-family: var(--serifa);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.folha-topo h2 .fraco {
+  font-weight: 400;
+}
+.carimbo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px 0 10px;
+  border: 1.5px solid var(--cor);
+  border-radius: 6px;
+  color: var(--cor);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.carimbo button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 1.1rem;
+}
+.carimbo button:hover {
+  background: color-mix(in srgb, var(--cor) 15%, transparent);
+}
+
+.dia {
+  display: grid;
+  grid-template-columns: var(--margem-x) minmax(0, 1fr);
+}
+/* Uma linha de pauta em branco entre um dia e outro. */
+.dia + .dia {
+  margin-top: var(--linha-pauta);
+}
+/* Cabe em uma linha de pauta, para dias com um só lançamento não desalinharem a folha. */
+.dia-margem {
+  height: var(--linha-pauta);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1;
+}
+.dia-numero {
+  font-family: var(--serifa);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: lining-nums;
+}
+.dia-semana {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--margem);
+}
+.dia-itens {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 0 20px;
+}
+.lancamento,
+.subtotal {
+  height: var(--linha-pauta);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lancamento {
+  position: relative;
+  padding-right: 4px;
+}
+.lancamento::before {
+  /* marca-texto ao passar o mouse */
+  content: "";
+  position: absolute;
+  inset: 12px -6px 7px -8px;
+  background: var(--marca-texto);
+  opacity: 0;
+  border-radius: 3px;
+  transform: scaleX(0.96);
+  transform-origin: left;
+  transition: opacity 0.15s, transform 0.2s;
+  z-index: 0;
+}
+.lancamento:hover::before,
+.lancamento:focus-within::before {
+  opacity: 0.45;
+  transform: none;
+}
+.lancamento > * {
+  position: relative;
+  z-index: 1;
+}
+.descricao {
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.etiqueta {
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--cor) 55%, transparent);
+  color: var(--cor);
+  background: transparent;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  transition: background 0.15s;
+}
+.etiqueta:hover {
+  background: color-mix(in srgb, var(--cor) 14%, transparent);
+}
+.pontilhado {
+  flex: 1;
+  min-width: 16px;
+  border-bottom: 2px dotted color-mix(in srgb, var(--tinta) 28%, transparent);
+  transform: translateY(5px);
+}
+.valor {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+.apagar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fraco);
+  font-size: 1.15rem;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+.lancamento:hover .apagar,
+.apagar:focus-visible {
+  opacity: 1;
+}
+.apagar:hover {
+  color: var(--erro);
+  background: color-mix(in srgb, var(--erro) 12%, transparent);
+}
+@media (hover: none) {
+  .apagar {
+    opacity: 1;
+  }
+}
+.subtotal {
+  justify-content: flex-end;
+  padding-right: 46px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--fraco);
+}
+.subtotal .valor {
+  font-size: 0.85rem;
+  color: var(--tinta);
+  border-top: 1.5px solid var(--tinta);
+  padding-top: 2px;
+}
+.folha-vazia {
+  padding: var(--linha-pauta) 24px 0 calc(var(--margem-x) + 20px);
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+  color: var(--fraco);
+  font-family: var(--serifa);
+  font-size: 1.1rem;
+  font-style: italic;
+}
+
+/* Formulário em forma de comprovante */
+.ticket {
+  display: grid;
+  gap: 18px;
+  padding: 22px 22px 24px;
+  background: var(--folha);
+  border: 1px solid var(--linha);
+  border-radius: 14px;
+  position: relative;
+}
+.ticket::before,
+.ticket::after {
+  /* recortes laterais de comprovante */
+  content: "";
+  position: absolute;
+  top: 62px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--papel);
+  border: 1px solid var(--linha);
+}
+.ticket::before {
+  left: -9px;
+  clip-path: inset(0 0 0 50%);
+}
+.ticket::after {
+  right: -9px;
+  clip-path: inset(0 50% 0 0);
+}
+.ticket-topo {
+  font-family: var(--serifa);
+  font-size: 1.35rem;
+  font-weight: 600;
+  padding-bottom: 18px;
+  border-bottom: 2px dashed var(--linha);
+}
+.campo {
+  display: grid;
+  gap: 6px;
+}
+.campo > span:first-child,
+.escolha legend {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fraco);
+}
+.campo input {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--linha);
+  border-radius: 8px;
+  background: var(--papel);
+  font-size: 0.95rem;
+  width: 100%;
+}
+.campo input:focus-visible,
+.valor-entrada:focus-within {
+  outline: none;
+  border-color: var(--tinta);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tinta) 14%, transparent);
+}
+.valor-entrada {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--linha);
+  border-radius: 8px;
+  background: var(--papel);
+  font-family: var(--mono);
+}
+.valor-entrada > span {
+  color: var(--fraco);
+}
+.campo .valor-entrada input {
+  border: 0;
+  padding: 0;
+  min-height: 48px;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 1.7rem;
+  font-weight: 500;
+  box-shadow: none;
+}
+.campo-valor:has([aria-invalid="true"]) .valor-entrada {
+  border-color: var(--erro);
+}
+.erro {
+  margin-top: -10px;
+  color: var(--erro);
+  font-size: 0.85rem;
+}
+.escolha {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.escolha legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+.opcao input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.opcao span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--linha);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.opcao span::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--cor);
+}
+.opcao span:hover {
+  border-color: var(--cor);
+}
+.opcao input:checked + span {
+  border-color: var(--cor);
+  background: color-mix(in srgb, var(--cor) 14%, transparent);
+  color: var(--tinta);
+  font-weight: 600;
+}
+.opcao input:focus-visible + span {
+  outline: 2px solid var(--cor);
+  outline-offset: 2px;
+}
+.duas-colunas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.botao {
+  min-height: 50px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--tinta);
+  color: var(--folha);
+  font-weight: 600;
+  font-size: 1rem;
+  transition: transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--tinta) 60%, black);
+}
+.botao:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--tinta) 60%, black);
+}
+.botao:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--tinta) 60%, black);
+}
+.botao-contorno {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1.5px solid var(--tinta);
+  border-radius: 8px;
+  background: transparent;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: background 0.15s, color 0.15s;
+}
+.botao-contorno:hover {
+  background: var(--tinta);
+  color: var(--folha);
+}
+.nota {
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: var(--fraco);
+  text-align: center;
+}
+
+/* Telas médias: o formulário sobe para a coluna do resumo */
+@media (max-width: 1180px) {
+  .grade {
+    grid-template-columns: 300px minmax(0, 1fr);
+    grid-template-areas:
+      "form folha"
+      "resumo folha";
+  }
+}
+
+/* Telas pequenas: tudo em uma coluna (o layout mobile próprio vem depois) */
+@media (max-width: 820px) {
+  .pagina {
+    padding: 20px 16px 40px;
+  }
+  .cabecalho {
+    flex-wrap: wrap;
+  }
+  .marca h1 {
+    font-size: 2rem;
+  }
+  .grade {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "resumo" "form" "folha";
+  }
+  .lateral-form {
+    position: static;
+  }
+  .folha {
+    --margem-x: 56px;
+  }
+  .folha-topo {
+    padding-left: calc(var(--margem-x) + 12px);
+  }
+  .folha-topo h2 {
+    font-size: 1.2rem;
+  }
+  .folha-topo h2 .fraco {
+    display: none; /* o ano já aparece nas abas */
+  }
+  .etiqueta {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
