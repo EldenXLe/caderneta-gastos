@@ -122,3 +122,51 @@ export function resumoDoMes(gastos, mes) {
     .sort((a, b) => b.total - a.total);
   return { itens: doMes, total, porCategoria };
 }
+
+/** Um mês e meio de gastos realistas para quem abre o app pela primeira vez (nada no futuro). */
+export function dadosDeExemplo(hoje) {
+  const base = new Date(`${hoje}T12:00`);
+  const diasAtras = (n) => hojeISO(new Date(base.getFullYear(), base.getMonth(), base.getDate() - n));
+  const lista = [
+    [0, 3290, "restaurante", "Almoço perto do trabalho"],
+    [1, 1180, "transporte", "Ônibus da semana"],
+    [2, 18740, "mercado", "Compra do mês"],
+    [4, 6490, "restaurante", "Pizza de sexta"],
+    [5, 2450, "transporte", "Uber"],
+    [7, 5630, "saude", "Farmácia"],
+    [9, 14990, "casa", "Internet"],
+    [11, 9870, "mercado", "Hortifrúti e padaria"],
+    [13, 12000, "lazer", "Show no sábado"],
+    [16, 4500, "outros", "Presente de aniversário"],
+    [20, 21300, "casa", "Conta de luz"],
+    [24, 15400, "mercado", "Mercado"],
+    [29, 3800, "restaurante", "Café com amigos"],
+    [33, 8900, "saude", "Consulta"],
+    [38, 26700, "mercado", "Compra do mês"],
+  ];
+  const gastos = lista.map(([n, valor, categoria, descricao], i) => ({
+    id: `exemplo-${i}`,
+    valor,
+    categoria,
+    descricao,
+    data: diasAtras(n),
+    criadoEm: i,
+    exemplo: true,
+  }));
+  const inicio = somarMes(hoje.slice(0, 7), -2);
+  const recorrentes = [
+    ["Netflix", 5590, 10],
+    ["Spotify", 2190, 5],
+  ].map(([descricao, valor, dia], i) => ({
+    id: `exemplo-r${i}`,
+    valor,
+    descricao,
+    categoria: "assinaturas",
+    dia,
+    inicio,
+    fim: null,
+    pulados: [],
+    exemplo: true,
+  }));
+  return { gastos, recorrentes };
+}

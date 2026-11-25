@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CATEGORIAS,
   agruparPorDia,
+  dadosDeExemplo,
   expandirRecorrentes,
   filtrarPorCategoria,
   fimAoCancelar,
@@ -38,6 +39,19 @@ function useOnline() {
     };
   }, []);
   return online;
+}
+
+/** Mesmo ponto de quebra do CSS: abaixo dele o formulário vira painel inferior. */
+function useCelular() {
+  const consulta = "(max-width: 820px)";
+  const [celular, setCelular] = useState(() => matchMedia(consulta).matches);
+  useEffect(() => {
+    const mq = matchMedia(consulta);
+    const mudar = () => setCelular(mq.matches);
+    mq.addEventListener("change", mudar);
+    return () => mq.removeEventListener("change", mudar);
+  }, []);
+  return celular;
 }
 
 /** Botão "Instalar" quando o navegador oferece (Chrome, Edge, Android). */
@@ -82,8 +96,25 @@ export default function App() {
   const [data, setData] = useState(hojeISO);
   const [erro, setErro] = useState("");
   const [falhaAoSalvar, setFalhaAoSalvar] = useState(false);
+  const [formAberto, setFormAberto] = useState(false);
+  const campoValor = useRef(null);
   const online = useOnline();
   const instalar = useInstalar();
+  const celular = useCelular();
+  const painelAberto = celular && formAberto;
+
+  // No celular as abas rolam de lado: mantém o mês escolhido à vista.
+  useEffect(() => {
+    document.querySelector(".aba[aria-current]")?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [mes]);
+
+  useEffect(() => {
+    if (!painelAberto) return;
+    campoValor.current?.focus();
+    const fecharNoEsc = (e) => e.key === "Escape" && setFormAberto(false);
+    addEventListener("keydown", fecharNoEsc);
+    return () => removeEventListener("keydown", fecharNoEsc);
+  }, [painelAberto]);
 
   const ano = Number(mes.slice(0, 4));
   const indiceMes = Number(mes.slice(5, 7)) - 1;
@@ -101,6 +132,8 @@ export default function App() {
     total: itens.filter((g) => g.categoria === c.id).reduce((s, g) => s + g.valor, 0),
   }));
   const nomeMes = nomeDoMes(mes).split(" ")[0].toLowerCase();
+  const vazio = gastos.length === 0 && recorrentes.length === 0;
+  const temExemplo = gastos.some((g) => g.exemplo) || recorrentes.some((r) => r.exemplo);
 
   function salvar(chave, valor) {
     try {
@@ -147,6 +180,21 @@ export default function App() {
     setValor("");
     setDescricao("");
     setErro("");
+    setFormAberto(false);
+  }
+
+  function carregarExemplo() {
+    const exemplo = dadosDeExemplo(hoje);
+    guardar(exemplo.gastos);
+    guardarRecorrentes(exemplo.recorrentes);
+    setMes(mesAtual);
+    setFiltro(null);
+  }
+
+  // Tira só o que veio do exemplo; o que a pessoa anotou por cima fica.
+  function apagarExemplo() {
+    guardar(gastos.filter((g) => !g.exemplo));
+    guardarRecorrentes(recorrentes.filter((r) => !r.exemplo));
   }
 
   function remover(g) {
@@ -201,6 +249,18 @@ export default function App() {
         </p>
       )}
 
+      {temExemplo && (
+        <div className="faixa-exemplo" role="status">
+          <p>
+            <strong>Você está vendo dados de exemplo.</strong> Fique à vontade para filtrar, pular meses e cancelar
+            assinaturas.
+          </p>
+          <button type="button" className="botao-contorno" onClick={apagarExemplo}>
+            Apagar exemplo
+          </button>
+        </div>
+      )}
+
       <nav className="abas" aria-label={`Meses de ${ano}`}>
         <button type="button" className="aba-ano" onClick={() => irParaMes(ano - 1, indiceMes)} aria-label="Ano anterior">
           ‹
@@ -228,7 +288,7 @@ export default function App() {
 
       <div className="grade">
         <aside className="resumo" aria-label="Resumo do mês">
-          <section className="bloco">
+          <section className="bloco bloco-total">
             <p className="rotulo">Total de {nomeMes}</p>
             <p className="total">{reais(total)}</p>
             <p className="fraco">
@@ -248,7 +308,7 @@ export default function App() {
             )}
           </section>
 
-          <section className="bloco" aria-labelledby="titulo-categorias">
+          <section className="bloco bloco-filtros" aria-labelledby="titulo-categorias">
             <h2 id="titulo-categorias" className="rotulo">
               Filtrar por categoria
             </h2>
@@ -282,7 +342,7 @@ export default function App() {
             </ul>
           </section>
 
-          <section className="bloco" aria-labelledby="titulo-recorrentes">
+          <section className="bloco bloco-recorrentes" aria-labelledby="titulo-recorrentes">
             <h2 id="titulo-recorrentes" className="rotulo">
               Assinaturas e recorrentes
             </h2>
@@ -365,7 +425,7 @@ export default function App() {
             )}
             {recorrentesVisiveis.length > 0 && (
               <p className="dica">
-                Para pausar um mês só, passe o mouse no lançamento e use <strong>pular mês</strong>.
+                Para pausar um mês só, use <strong>pular mês</strong> no lançamento daquele mês.
               </p>
             )}
           </section>
@@ -399,6 +459,14 @@ export default function App() {
                   Ver todas as categorias
                 </button>
               )}
+              {vazio && (
+                <>
+                  <button type="button" className="botao" onClick={carregarExemplo}>
+                    Ver com dados de exemplo
+                  </button>
+                  <small>Um mês e meio de gastos e duas assinaturas, que você apaga com um clique.</small>
+                </>
+              )}
             </div>
           ) : (
             dias.map((dia) => (
@@ -409,7 +477,11 @@ export default function App() {
                 </div>
                 <ul className="dia-itens">
                   {dia.itens.map((g) => (
-                    <li key={g.id} className={`lancamento ${g.data > hoje ? "previsto" : ""}`}>
+                    <li
+                      key={g.id}
+                      className={`lancamento ${g.data > hoje ? "previsto" : ""}`}
+                      style={{ "--cor": porId[g.categoria].cor }}
+                    >
                       {g.recorrenteId && (
                         <span className="marca-recorrente" role="img" title="Cobrança recorrente" aria-label="Cobrança recorrente">
                           ↻
@@ -453,17 +525,25 @@ export default function App() {
           )}
         </main>
 
-        <aside className="lateral-form">
+        {painelAberto && <div className="fundo-escuro" onClick={() => setFormAberto(false)} aria-hidden="true" />}
+        <aside
+          className={`lateral-form ${formAberto ? "aberto" : ""}`}
+          {...(celular && { role: "dialog", "aria-modal": "true", "aria-labelledby": "titulo-form" })}
+        >
           <form className="ticket" onSubmit={adicionar} noValidate aria-labelledby="titulo-form">
-            <h2 id="titulo-form" className="ticket-topo">
-              Novo gasto
-            </h2>
+            <div className="ticket-topo">
+              <h2 id="titulo-form">Novo gasto</h2>
+              <button type="button" className="fechar-painel" onClick={() => setFormAberto(false)} aria-label="Fechar">
+                ×
+              </button>
+            </div>
 
             <label className="campo campo-valor">
               <span>Valor</span>
               <span className="valor-entrada">
                 <span aria-hidden="true">R$</span>
                 <input
+                  ref={campoValor}
                   inputMode="decimal"
                   placeholder="0,00"
                   value={valor}
@@ -526,6 +606,12 @@ export default function App() {
           <p className="nota">Seus dados ficam só neste aparelho e nada é enviado para a internet.</p>
         </aside>
       </div>
+
+      {celular && !formAberto && (
+        <button type="button" className="botao botao-flutuante" onClick={() => setFormAberto(true)}>
+          + Anotar gasto
+        </button>
+      )}
     </div>
   );
 }

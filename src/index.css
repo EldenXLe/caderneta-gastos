@@ -578,11 +578,45 @@ p {
   clip-path: inset(0 50% 0 0);
 }
 .ticket-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 18px;
+  border-bottom: 2px dashed var(--linha);
+}
+.ticket-topo h2 {
   font-family: var(--serifa);
   font-size: 1.35rem;
   font-weight: 600;
-  padding-bottom: 18px;
-  border-bottom: 2px dashed var(--linha);
+}
+.fechar-painel,
+.botao-flutuante,
+.fundo-escuro {
+  display: none;
+}
+
+.faixa-exemplo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 10px 10px 10px 16px;
+  border: 1.5px dashed var(--margem);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--marca-texto) 22%, var(--papel));
+  font-size: 0.9rem;
+}
+.folha-vazia small {
+  font-family: var(--sans);
+  font-style: normal;
+  font-size: 0.8rem;
+  margin-top: -8px;
+}
+.folha-vazia .botao {
+  padding: 0 20px;
+  font-style: normal;
+  font-family: var(--sans);
 }
 .campo {
   display: grid;
@@ -743,41 +777,6 @@ p {
     grid-template-areas:
       "form folha"
       "resumo folha";
-  }
-}
-
-/* Telas pequenas: tudo em uma coluna (o layout mobile próprio vem depois) */
-@media (max-width: 820px) {
-  .pagina {
-    padding: 20px 16px 40px;
-  }
-  .cabecalho {
-    flex-wrap: wrap;
-  }
-  .marca h1 {
-    font-size: 2rem;
-  }
-  .grade {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "resumo" "form" "folha";
-  }
-  .lateral-form {
-    position: static;
-  }
-  .folha {
-    --margem-x: 56px;
-  }
-  .folha-topo {
-    padding-left: calc(var(--margem-x) + 12px);
-  }
-  .folha-topo h2 {
-    font-size: 1.2rem;
-  }
-  .folha-topo h2 .fraco {
-    display: none; /* o ano já aparece nas abas */
-  }
-  .etiqueta {
-    display: none;
   }
 }
 
@@ -964,4 +963,229 @@ p {
 }
 .botao-texto:hover {
   background: color-mix(in srgb, var(--erro) 12%, transparent);
+}
+
+/* ===== Celular e tablet em pé ===== */
+@media (max-width: 820px) {
+  .pagina {
+    padding: 16px 16px calc(96px + env(safe-area-inset-bottom));
+  }
+  .cabecalho {
+    align-items: center;
+    padding-bottom: 16px;
+  }
+  .marca h1 {
+    font-size: 1.9rem;
+  }
+  .marca p {
+    font-size: 0.7rem;
+  }
+  .faixa-exemplo {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  /* Abas: rolam de lado, o mês atual centralizado pelo app */
+  .abas {
+    gap: 4px;
+  }
+  .ano {
+    padding-bottom: 12px;
+  }
+  .abas ol {
+    margin-left: 6px;
+    scroll-snap-type: x proximity;
+  }
+  .abas li {
+    flex: 0 0 64px;
+    scroll-snap-align: center;
+  }
+
+  /* Ordem pensada para o polegar: total, filtros, folha, assinaturas */
+  .grade {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 22px;
+    padding-top: 20px;
+  }
+  .grade > *,
+  .resumo > * {
+    min-width: 0; /* sem isso a fileira de filtros alarga a página inteira */
+  }
+  .resumo {
+    display: contents;
+  }
+  .bloco-total {
+    order: 1;
+  }
+  .bloco-filtros {
+    order: 2;
+  }
+  .folha {
+    order: 3;
+  }
+  .bloco-recorrentes {
+    order: 4;
+  }
+  .total {
+    font-size: 2.2rem;
+  }
+
+  /* Filtros viram uma fileira de fichas */
+  .filtros {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    border: 0;
+    margin: 0 -16px;
+    padding: 2px 16px 6px;
+    scrollbar-width: none;
+  }
+  .filtros li {
+    flex: none;
+  }
+  .filtro,
+  .filtro:hover {
+    width: auto;
+    min-height: 44px;
+    gap: 10px;
+    padding: 0 14px;
+    border: 1px solid var(--linha);
+    border-radius: 999px;
+    background: transparent;
+  }
+  .filtro[aria-pressed="true"] {
+    border-color: var(--cor, var(--tinta));
+    background: color-mix(in srgb, var(--cor, var(--tinta)) 14%, var(--folha));
+    box-shadow: none;
+  }
+  .filtro.vazio {
+    display: none;
+  }
+  .filtro-valor small {
+    display: none;
+  }
+
+  /* Folha: margem mais estreita, categoria vira um ponto de cor */
+  .folha {
+    --margem-x: 52px;
+    border-radius: 4px 12px 12px 4px;
+  }
+  .folha-topo {
+    padding: 0 12px 0 calc(var(--margem-x) + 12px);
+  }
+  .folha-topo h2 {
+    font-size: 1.2rem;
+  }
+  .folha-topo h2 .fraco {
+    display: none; /* o ano já aparece nas abas */
+  }
+  .folha-vazia {
+    padding: var(--linha-pauta) 16px 0 calc(var(--margem-x) + 12px);
+  }
+  .dia-itens {
+    padding: 0 4px 0 12px;
+  }
+  .lancamento {
+    gap: 6px;
+  }
+  .etiqueta {
+    display: none;
+  }
+  .descricao::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 7px;
+    border-radius: 2px;
+    background: var(--cor);
+    vertical-align: 1px;
+  }
+  .valor {
+    font-size: 0.85rem;
+  }
+  .pontilhado {
+    min-width: 6px;
+  }
+  .apagar {
+    width: 36px;
+    height: 40px;
+  }
+  .faixa-exemplo {
+    font-size: 0.82rem;
+  }
+  .apagar.pular {
+    width: auto;
+    padding: 0 6px;
+  }
+  .subtotal {
+    padding-right: 44px;
+  }
+
+  /* Formulário: painel que sobe de baixo */
+  .lateral-form {
+    display: none;
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 30;
+    max-height: 90dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .lateral-form.aberto {
+    display: block;
+    animation: subir 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .lateral-form .ticket {
+    border-radius: 18px 18px 0 0;
+    border-bottom: 0;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+  .lateral-form .ticket::before,
+  .lateral-form .ticket::after,
+  .lateral-form .nota {
+    display: none;
+  }
+  .fechar-painel {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: -8px -8px -8px 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    font-size: 1.6rem;
+    color: var(--fraco);
+  }
+  .fundo-escuro {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgb(10 12 20 / 0.45);
+  }
+  body:has(.lateral-form.aberto) {
+    overflow: hidden;
+  }
+  .botao-flutuante {
+    display: block;
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    z-index: 20;
+    box-shadow: 0 3px 0 color-mix(in srgb, var(--tinta) 60%, black), 0 10px 30px -8px rgb(0 0 0 / 0.45);
+  }
+}
+
+@keyframes subir {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
 }

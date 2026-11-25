@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   agruparPorDia,
+  dadosDeExemplo,
   expandirRecorrentes,
   fimAoCancelar,
   somarMes,
@@ -126,5 +127,20 @@ describe("cancelar recorrente", () => {
   it("somarMes atravessa o ano", () => {
     expect(somarMes("2026-12", 1)).toBe("2027-01");
     expect(somarMes("2027-01", -1)).toBe("2026-12");
+  });
+});
+
+describe("dados de exemplo", () => {
+  const { gastos, recorrentes } = dadosDeExemplo("2026-11-05");
+
+  it("nada no futuro e tudo marcado como exemplo", () => {
+    expect(gastos.length).toBeGreaterThan(10);
+    expect(gastos.every((g) => g.data <= "2026-11-05" && g.exemplo)).toBe(true);
+    expect(recorrentes.every((r) => r.exemplo && r.inicio === "2026-09")).toBe(true);
+  });
+  it("cobre o mês atual e o anterior, mesmo no começo do mês", () => {
+    const meses = new Set(gastos.map((g) => g.data.slice(0, 7)));
+    expect(meses.has("2026-11")).toBe(true);
+    expect(meses.has("2026-10")).toBe(true);
   });
 });

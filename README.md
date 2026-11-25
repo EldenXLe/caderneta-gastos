@@ -14,6 +14,8 @@ Um PWA (Progressive Web App) para anotar os gastos do mês por categoria. Ele **
 - Tem **cobranças recorrentes**: ao anotar com "Repetir todo mês" (ideal para a categoria Assinaturas), os meses seguintes se preenchem sozinhos e aparecem como previsão. "Pular mês" pausa só aquele mês e pode ser desfeito. "Cancelar" pede confirmação na própria página, explicando quais meses ficam e quais saem: se a cobrança do mês já caiu, ela fica no histórico. O cancelamento também pode ser desfeito.
 - Abre e funciona **offline**: um service worker guarda o app inteiro no aparelho.
 - É instalável: tem manifest, ícones e um botão "Instalar app" quando o navegador oferece.
+- Tem layout próprio para celular. Os filtros viram uma fileira de fichas, as abas rolam até o mês atual e o formulário abre como um painel que sobe da parte de baixo da tela, pelo botão "+ Anotar gasto".
+- Tem o botão **"Ver com dados de exemplo"**: quem abre pela primeira vez vê um mês e meio de gastos e duas assinaturas, e apaga tudo com um clique sem perder o que anotou por cima.
 - Mostra quando você está online ou offline.
 
 ## Stack
