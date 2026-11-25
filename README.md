@@ -2,7 +2,9 @@
 
 Um PWA (Progressive Web App) para anotar os gastos do mês por categoria. Ele **funciona sem internet** e pode ser instalado no celular ou no computador como um app.
 
-<!-- Coloque aqui um GIF: adicionando um gasto, ligando o modo avião, recarregando, e o app abrindo normalmente. Adicione também o link do deploy. -->
+**[Abrir o app → caderneta-gastos.vercel.app](https://caderneta-gastos.vercel.app)**
+
+<!-- Coloque aqui um GIF: adicionando um gasto, ligando o modo avião, recarregando, e o app abrindo normalmente. -->
 
 ## O que ele faz
 
