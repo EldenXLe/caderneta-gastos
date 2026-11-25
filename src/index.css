@@ -980,6 +980,12 @@ p {
   .marca p {
     font-size: 0.7rem;
   }
+  .status {
+    white-space: nowrap;
+  }
+  .status-extra {
+    display: none; /* no celular o cabeçalho não tem espaço para a frase inteira */
+  }
   .faixa-exemplo {
     flex-direction: column;
     align-items: stretch;

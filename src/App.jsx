@@ -233,7 +233,13 @@ export default function App() {
         </div>
         <div className="cabecalho-acoes">
           <span className={`status ${online ? "on" : "off"}`} role="status">
-            {online ? "Online" : "Offline · tudo salvo no aparelho"}
+            {online ? (
+              "Online"
+            ) : (
+              <>
+                Offline<span className="status-extra"> · tudo salvo no aparelho</span>
+              </>
+            )}
           </span>
           {instalar && (
             <button type="button" className="botao-contorno" onClick={instalar}>

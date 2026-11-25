@@ -4,7 +4,7 @@ Um PWA (Progressive Web App) para anotar os gastos do mês por categoria. Ele **
 
 **[Abrir o app → caderneta-gastos.vercel.app](https://caderneta-gastos.vercel.app)**
 
-<!-- Coloque aqui um GIF: adicionando um gasto, ligando o modo avião, recarregando, e o app abrindo normalmente. -->
+![Apresentação da Caderneta: dados de exemplo, abas dos meses, filtros, novo gasto, assinatura recorrente, pular mês, cancelar, modo offline e a versão para celular](docs/apresentacao.gif)
 
 ## O que ele faz
 
