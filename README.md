@@ -1,5 +1,7 @@
 # Caderneta: controle de gastos offline
 
+[![Testes](https://github.com/EldenXLe/caderneta-gastos/actions/workflows/testes.yml/badge.svg)](https://github.com/EldenXLe/caderneta-gastos/actions/workflows/testes.yml)
+
 Um PWA (Progressive Web App) para anotar os gastos do mês por categoria. Ele **funciona sem internet** e pode ser instalado no celular ou no computador como um app.
 
 **[Abrir o app → caderneta-gastos.vercel.app](https://caderneta-gastos.vercel.app)**
@@ -25,7 +27,7 @@ Um PWA (Progressive Web App) para anotar os gastos do mês por categoria. Ele **
 
 - React 19 + Vite, em JavaScript
 - vite-plugin-pwa (Workbox) para o service worker e o manifest
-- Vitest para os testes
+- Vitest para os testes de unidade e Playwright para os de ponta a ponta, que rodam no GitHub Actions a cada push
 - CSS puro. As fontes (Fraunces e JetBrains Mono) são servidas pelo próprio app e ficam guardadas pelo service worker, então aparecem também offline
 
 ## Design
@@ -41,9 +43,12 @@ Em vez do visual padrão de app de finanças (cartões arredondados, roxo, gráf
 ```bash
 npm install
 npm run dev       # desenvolvimento
-npm test          # testes
+npm test          # testes de unidade (regras, backup, CSV)
+npx playwright install chromium && npm run test:e2e   # testes de ponta a ponta
 npm run build && npm run preview   # versão de produção, com o service worker ativo
 ```
+
+Os testes de ponta a ponta abrem o build de produção num navegador de verdade, em tamanho de computador e de celular. Eles percorrem os fluxos completos: dados de exemplo, anotar e apagar, filtros, assinaturas (pular mês, cancelar e desfazer), orçamento, CSV, backup e restauração, tema, e o app recarregando sem internet. O relógio fica parado numa data fixa, então o resultado não depende do dia em que eles rodam. Para usar um navegador já instalado em vez de baixar o Chromium, rode `PW_CHANNEL=msedge npm run test:e2e`.
 
 Para testar o modo offline: rode o `preview`, abra o app uma vez, pare o servidor e recarregue a página. O app abre normalmente.
 

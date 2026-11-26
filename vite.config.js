@@ -3,6 +3,8 @@ import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  // Vitest fica com os testes de unidade; os de ponta a ponta (e2e/) são do Playwright.
+  test: { include: ["src/**/*.test.js"] },
   plugins: [
     react(),
     // Gera o service worker que guarda o app inteiro no aparelho e o manifest que permite instalar.
