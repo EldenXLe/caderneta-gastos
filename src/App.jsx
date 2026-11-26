@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   CATEGORIAS,
   agruparPorDia,
@@ -51,17 +51,50 @@ function useOnline() {
   return online;
 }
 
-/** Mesmo ponto de quebra do CSS: abaixo dele o formulário vira painel inferior. */
-function useCelular() {
-  const consulta = "(max-width: 820px)";
-  const [celular, setCelular] = useState(() => matchMedia(consulta).matches);
+/**
+ * Acompanha uma media query do CSS (tamanho de tela, tema do sistema).
+ * useSyncExternalStore relê o valor real: uma mudança entre o primeiro desenho e a inscrição não se perde.
+ */
+function useConsulta(consulta) {
+  const inscrever = useCallback(
+    (avisar) => {
+      const mq = matchMedia(consulta);
+      mq.addEventListener("change", avisar);
+      return () => mq.removeEventListener("change", avisar);
+    },
+    [consulta],
+  );
+  return useSyncExternalStore(inscrever, () => matchMedia(consulta).matches);
+}
+
+const CHAVE_TEMA = "caderneta:tema";
+const COR_BARRA = { claro: "#f3eee2", escuro: "#14161a" };
+
+/** Tema escolhido no botão; sem escolha, segue o sistema. O index.html aplica a escolha antes de desenhar. */
+function useTema() {
+  const [escolhido, setEscolhido] = useState(() => {
+    try {
+      return localStorage.getItem(CHAVE_TEMA);
+    } catch {
+      return null;
+    }
+  });
+  const sistemaEscuro = useConsulta("(prefers-color-scheme: dark)");
+  const tema = escolhido ?? (sistemaEscuro ? "escuro" : "claro");
   useEffect(() => {
-    const mq = matchMedia(consulta);
-    const mudar = () => setCelular(mq.matches);
-    mq.addEventListener("change", mudar);
-    return () => mq.removeEventListener("change", mudar);
-  }, []);
-  return celular;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", COR_BARRA[tema]);
+  }, [tema]);
+  function alternar() {
+    const novo = tema === "escuro" ? "claro" : "escuro";
+    document.documentElement.dataset.tema = novo;
+    setEscolhido(novo);
+    try {
+      localStorage.setItem(CHAVE_TEMA, novo);
+    } catch {
+      // sem armazenamento a escolha vale só até fechar a página
+    }
+  }
+  return [tema, alternar];
 }
 
 /** Botão "Instalar" quando o navegador oferece (Chrome, Edge, Android). */
@@ -116,7 +149,9 @@ export default function App() {
   const campoValor = useRef(null);
   const online = useOnline();
   const instalar = useInstalar();
-  const celular = useCelular();
+  // Mesmo ponto de quebra do CSS: abaixo dele o formulário vira painel inferior.
+  const celular = useConsulta("(max-width: 820px)");
+  const [tema, alternarTema] = useTema();
   const painelAberto = celular && formAberto;
 
   // No celular as abas rolam de lado: mantém o mês escolhido à vista.
@@ -318,6 +353,26 @@ export default function App() {
               </>
             )}
           </span>
+          <button
+            type="button"
+            className="botao-tema"
+            onClick={alternarTema}
+            aria-pressed={tema === "escuro"}
+            aria-label="Modo escuro"
+            title={tema === "escuro" ? "Voltar para o modo claro" : "Mudar para o modo escuro"}
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              {tema === "escuro" ? (
+                <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="4.5" />
+                  <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" />
+                </g>
+              ) : (
+                <path fill="currentColor" d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1z" />
+              )}
+            </svg>
+            <span className="botao-tema-texto">{tema === "escuro" ? "Claro" : "Escuro"}</span>
+          </button>
           {instalar && (
             <button type="button" className="botao-contorno" onClick={instalar}>
               Instalar app

@@ -5,7 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Caderneta — controle de gastos offline</title>
     <meta name="description" content="Anote seus gastos do mês por categoria. Funciona sem internet e pode ser instalado no celular." />
-    <meta name="theme-color" content="#0f7b5f" />
+    <meta name="theme-color" content="#f3eee2" />
+    <script>
+      // Aplica o tema escolhido antes de desenhar a página, para não piscar no tema errado.
+      try {
+        var tema = localStorage.getItem("caderneta:tema");
+        if (tema === "claro" || tema === "escuro") document.documentElement.dataset.tema = tema;
+      } catch (e) {}
+    </script>
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />

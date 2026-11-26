@@ -7,41 +7,33 @@
   src: url("@fontsource-variable/fraunces/files/fraunces-latin-opsz-normal.woff2") format("woff2-variations");
 }
 
+/* Cada cor tem a versão clara e a escura; o color-scheme decide qual vale.
+   Sem escolha, segue o sistema; o botão grava data-tema="claro" ou "escuro" no <html>. */
 :root {
-  --papel: #f3eee2;
-  --folha: #fbf8f0;
-  --tinta: #1d2740;
-  --fraco: #6b6f7d;
-  --linha: #ddd5c4;
-  --pauta: #d6e0ee;
-  --margem: #e0634f;
-  --marca-texto: #ffe27a;
-  --erro: #b42318;
-  --ok: #2f7d55;
+  color-scheme: light dark;
+  --papel: light-dark(#f3eee2, #14161a);
+  --folha: light-dark(#fbf8f0, #1b1e23);
+  --tinta: light-dark(#1d2740, #ebe6da);
+  --fraco: light-dark(#6b6f7d, #9a9ea8);
+  --linha: light-dark(#ddd5c4, #2e323a);
+  --pauta: light-dark(#d6e0ee, #252b35);
+  --margem: light-dark(#e0634f, #d8665a);
+  --marca-texto: light-dark(#ffe27a, #6b5a12);
+  --erro: light-dark(#b42318, #ff8a7a);
+  --ok: light-dark(#2f7d55, #5cc493);
   --serifa: "Fraunces", Georgia, serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --linha-pauta: 40px;
-  color-scheme: light;
   font-family: var(--sans);
   background: var(--papel);
   color: var(--tinta);
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --papel: #14161a;
-    --folha: #1b1e23;
-    --tinta: #ebe6da;
-    --fraco: #9a9ea8;
-    --linha: #2e323a;
-    --pauta: #252b35;
-    --margem: #d8665a;
-    --marca-texto: #6b5a12;
-    --erro: #ff8a7a;
-    --ok: #5cc493;
-    color-scheme: dark;
-  }
+:root[data-tema="claro"] {
+  color-scheme: light;
+}
+:root[data-tema="escuro"] {
+  color-scheme: dark;
 }
 
 * {
@@ -1382,5 +1374,41 @@ p {
 @media (max-width: 820px) {
   .bloco-dados {
     order: 6;
+  }
+}
+
+/* Botão de tema */
+.botao-tema {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--linha);
+  border-radius: 999px;
+  background: var(--folha);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--tinta);
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.botao-tema:hover {
+  border-color: var(--tinta);
+}
+.botao-tema:active {
+  transform: scale(0.96);
+}
+.botao-tema svg {
+  color: var(--margem);
+}
+@media (max-width: 820px) {
+  .botao-tema {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .botao-tema-texto {
+    display: none;
   }
 }
