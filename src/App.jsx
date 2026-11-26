@@ -15,6 +15,14 @@ import {
   somarMes,
   totaisDoAno,
 } from "./gastos";
+import { gerarCSV, lerBackup, montarBackup } from "./backup";
+
+function baixar(nome, conteudo, tipo) {
+  const url = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: nome });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 const CHAVE = "caderneta:gastos";
 const CHAVE_RECORRENTES = "caderneta:recorrentes";
@@ -91,6 +99,9 @@ export default function App() {
   const [orcamentos, setOrcamentos] = useState(() => carregar(CHAVE_ORCAMENTOS));
   const [rascunhoLimites, setRascunhoLimites] = useState(null); // null = fora do modo de edição
   const [limitesInvalidos, setLimitesInvalidos] = useState([]);
+  const [restauracao, setRestauracao] = useState(null); // backup lido, esperando confirmação
+  const [avisoDados, setAvisoDados] = useState(null);
+  const arquivoBackup = useRef(null);
   const [repetir, setRepetir] = useState(false);
   const [cancelando, setCancelando] = useState(null);
   const [mes, setMes] = useState(() => hojeISO().slice(0, 7));
@@ -230,6 +241,37 @@ export default function App() {
     guardar(gastos.filter((g) => !g.exemplo));
     guardarRecorrentes(recorrentes.filter((r) => !r.exemplo));
     guardarOrcamentos(orcamentos.filter((o) => !o.exemplo));
+  }
+
+  function exportarCSV() {
+    baixar(`caderneta-${mes}.csv`, gerarCSV(itens), "text/csv;charset=utf-8");
+  }
+
+  function baixarBackup() {
+    baixar(`caderneta-backup-${hoje}.json`, montarBackup({ gastos, recorrentes, orcamentos }), "application/json");
+    setAvisoDados({ tipo: "ok", texto: "Backup baixado. Guarde o arquivo num lugar seguro." });
+  }
+
+  async function lerArquivo(e) {
+    const arquivo = e.target.files[0];
+    e.target.value = ""; // permite escolher o mesmo arquivo de novo
+    if (!arquivo) return;
+    setAvisoDados(null);
+    if (arquivo.size > 5 * 1024 * 1024) return setAvisoDados({ tipo: "erro", texto: "Arquivo grande demais para ser um backup da Caderneta." });
+    const lido = lerBackup(await arquivo.text());
+    if (lido.erro) return setAvisoDados({ tipo: "erro", texto: lido.erro });
+    setRestauracao(lido);
+  }
+
+  function confirmarRestauracao() {
+    const { gastos: g, recorrentes: r, orcamentos: o } = restauracao.dados;
+    guardar(g);
+    guardarRecorrentes(r);
+    guardarOrcamentos(o);
+    setRestauracao(null);
+    setFiltro(null);
+    setMes(mesAtual);
+    setAvisoDados({ tipo: "ok", texto: "Backup restaurado." });
   }
 
   function remover(g) {
@@ -561,6 +603,59 @@ export default function App() {
             {recorrentesVisiveis.length > 0 && (
               <p className="dica">
                 Para pausar um mês só, use <strong>pular mês</strong> no lançamento daquele mês.
+              </p>
+            )}
+          </section>
+
+          <section className="bloco bloco-dados" aria-labelledby="titulo-dados">
+            <h2 id="titulo-dados" className="rotulo">
+              Seus dados
+            </h2>
+            <p className="fraco dados-texto">
+              Tudo fica só neste aparelho. Baixe um backup de vez em quando, ou leve para outro aparelho.
+            </p>
+            <div className="dados-acoes">
+              <button type="button" className="botao-contorno" onClick={exportarCSV} disabled={itens.length === 0}>
+                Exportar {nomeMes} (CSV)
+              </button>
+              <button type="button" className="botao-contorno" onClick={baixarBackup}>
+                Baixar backup
+              </button>
+              <button type="button" className="botao-contorno" onClick={() => arquivoBackup.current.click()}>
+                Restaurar backup
+              </button>
+              <input
+                ref={arquivoBackup}
+                type="file"
+                accept="application/json,.json"
+                onChange={lerArquivo}
+                hidden
+              />
+            </div>
+
+            {restauracao && (
+              <div className="confirmar" role="group" aria-label="Confirmar restauração do backup">
+                <p>
+                  <strong>Restaurar este backup?</strong>{" "}
+                  {restauracao.exportadoEm && `Feito em ${new Date(restauracao.exportadoEm).toLocaleDateString("pt-BR")}, com `}
+                  {restauracao.dados.gastos.length} gastos, {restauracao.dados.recorrentes.length} assinaturas e{" "}
+                  {restauracao.dados.orcamentos.length} limites. Ele <strong>substitui</strong> o que está na caderneta
+                  agora ({gastos.length} gastos).
+                </p>
+                <div className="confirmar-acoes">
+                  <button type="button" className="botao-perigo" onClick={confirmarRestauracao}>
+                    Substituir
+                  </button>
+                  <button type="button" className="botao-contorno" onClick={() => setRestauracao(null)}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {avisoDados && (
+              <p className={avisoDados.tipo === "erro" ? "erro aviso-dados" : "ok aviso-dados"} role={avisoDados.tipo === "erro" ? "alert" : "status"}>
+                {avisoDados.texto}
               </p>
             )}
           </section>

@@ -1348,3 +1348,39 @@ p {
     width: 140px;
   }
 }
+
+/* Seus dados: CSV e backup */
+.dados-texto {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+.dados-acoes {
+  display: grid;
+  gap: 8px;
+}
+.dados-acoes .botao-contorno {
+  width: 100%;
+  text-align: left;
+}
+.dados-acoes .botao-contorno:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.dados-acoes .botao-contorno:disabled:hover {
+  background: transparent;
+  color: inherit;
+}
+.aviso-dados {
+  margin-top: 10px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.aviso-dados.ok {
+  color: var(--ok);
+}
+@media (max-width: 820px) {
+  .bloco-dados {
+    order: 6;
+  }
+}
