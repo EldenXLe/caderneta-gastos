@@ -168,5 +168,17 @@ export function dadosDeExemplo(hoje) {
     pulados: [],
     exemplo: true,
   }));
-  return { gastos, recorrentes };
+  // Limites escolhidos para mostrar os três estados: folgado, perto do limite e estourado.
+  const orcamentos = [
+    ["mercado", 60000],
+    ["restaurante", 12000],
+    ["lazer", 10000],
+  ].map(([categoria, limite]) => ({ categoria, limite, exemplo: true }));
+  return { gastos, recorrentes, orcamentos };
+}
+
+/** Quanto do limite já foi: abaixo de 80% "ok", a partir de 80% "atencao", acima de 100% "estourou". */
+export function situacaoOrcamento(gasto, limite) {
+  const pct = gasto / limite;
+  return { pct, restante: limite - gasto, nivel: pct > 1 ? "estourou" : pct >= 0.8 ? "atencao" : "ok" };
 }

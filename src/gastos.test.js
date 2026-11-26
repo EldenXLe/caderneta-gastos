@@ -9,6 +9,7 @@ import {
   hojeISO,
   lerValor,
   resumoDoMes,
+  situacaoOrcamento,
   totaisDoAno,
 } from "./gastos";
 
@@ -142,5 +143,24 @@ describe("dados de exemplo", () => {
     const meses = new Set(gastos.map((g) => g.data.slice(0, 7)));
     expect(meses.has("2026-11")).toBe(true);
     expect(meses.has("2026-10")).toBe(true);
+  });
+});
+
+describe("orçamento", () => {
+  it("abaixo de 80% está ok e diz quanto falta", () => {
+    expect(situacaoOrcamento(30000, 60000)).toMatchObject({ nivel: "ok", restante: 30000, pct: 0.5 });
+  });
+  it("a partir de 80% pede atenção", () => {
+    expect(situacaoOrcamento(48000, 60000).nivel).toBe("atencao");
+    expect(situacaoOrcamento(47999, 60000).nivel).toBe("ok");
+  });
+  it("exatamente no limite ainda não estourou; acima, diz quanto passou", () => {
+    expect(situacaoOrcamento(60000, 60000)).toMatchObject({ nivel: "atencao", restante: 0 });
+    expect(situacaoOrcamento(64000, 60000)).toMatchObject({ nivel: "estourou", restante: -4000 });
+  });
+  it("o exemplo traz limites marcados como exemplo", () => {
+    const { orcamentos } = dadosDeExemplo("2026-11-25");
+    expect(orcamentos.length).toBeGreaterThan(0);
+    expect(orcamentos.every((o) => o.exemplo && o.limite > 0)).toBe(true);
   });
 });

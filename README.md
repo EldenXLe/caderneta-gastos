@@ -11,6 +11,7 @@ Um PWA (Progressive Web App) para anotar os gastos do mês por categoria. Ele **
 - Lança gastos com valor, categoria, data e descrição.
 - Mostra o total do mês com a divisão por categoria e permite **filtrar por categoria**, tanto pela lista lateral quanto clicando na etiqueta de um lançamento.
 - Organiza os lançamentos por dia, com o subtotal de cada dia, e tem abas de janeiro a dezembro com o total de cada mês.
+- Tem **orçamento por categoria**: você define um limite por mês, e uma barra mostra quanto já foi. Ela muda de cor a partir de 80% e de novo quando passa do limite, dizendo quanto falta ou quanto passou.
 - Tem **cobranças recorrentes**: ao anotar com "Repetir todo mês" (ideal para a categoria Assinaturas), os meses seguintes se preenchem sozinhos e aparecem como previsão. "Pular mês" pausa só aquele mês e pode ser desfeito. "Cancelar" pede confirmação na própria página, explicando quais meses ficam e quais saem: se a cobrança do mês já caiu, ela fica no histórico. O cancelamento também pode ser desfeito.
 - Abre e funciona **offline**: um service worker guarda o app inteiro no aparelho.
 - É instalável: tem manifest, ícones e um botão "Instalar app" quando o navegador oferece.

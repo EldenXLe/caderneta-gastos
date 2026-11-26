@@ -11,12 +11,14 @@ import {
   nomeDoMes,
   reais,
   resumoDoMes,
+  situacaoOrcamento,
   somarMes,
   totaisDoAno,
 } from "./gastos";
 
 const CHAVE = "caderneta:gastos";
 const CHAVE_RECORRENTES = "caderneta:recorrentes";
+const CHAVE_ORCAMENTOS = "caderneta:orcamentos";
 
 // shortcut: localStorage (~5 MB, uns 30 mil gastos); trocar por IndexedDB ao sincronizar com servidor.
 function carregar(chave) {
@@ -86,6 +88,9 @@ const reaisCurto = (centavos) =>
 export default function App() {
   const [gastos, setGastos] = useState(() => carregar(CHAVE));
   const [recorrentes, setRecorrentes] = useState(() => carregar(CHAVE_RECORRENTES));
+  const [orcamentos, setOrcamentos] = useState(() => carregar(CHAVE_ORCAMENTOS));
+  const [rascunhoLimites, setRascunhoLimites] = useState(null); // null = fora do modo de edição
+  const [limitesInvalidos, setLimitesInvalidos] = useState([]);
   const [repetir, setRepetir] = useState(false);
   const [cancelando, setCancelando] = useState(null);
   const [mes, setMes] = useState(() => hojeISO().slice(0, 7));
@@ -133,7 +138,8 @@ export default function App() {
   }));
   const nomeMes = nomeDoMes(mes).split(" ")[0].toLowerCase();
   const vazio = gastos.length === 0 && recorrentes.length === 0;
-  const temExemplo = gastos.some((g) => g.exemplo) || recorrentes.some((r) => r.exemplo);
+  const temExemplo = [gastos, recorrentes, orcamentos].some((lista) => lista.some((x) => x.exemplo));
+  const limitePorCategoria = Object.fromEntries(orcamentos.map((o) => [o.categoria, o.limite]));
 
   function salvar(chave, valor) {
     try {
@@ -150,6 +156,33 @@ export default function App() {
   function guardarRecorrentes(novas) {
     setRecorrentes(novas);
     salvar(CHAVE_RECORRENTES, novas);
+  }
+  function guardarOrcamentos(novos) {
+    setOrcamentos(novos);
+    salvar(CHAVE_ORCAMENTOS, novos);
+  }
+
+  const paraCampo = (centavos) => (centavos / 100).toFixed(2).replace(".", ",");
+  function editarLimites() {
+    setRascunhoLimites(
+      Object.fromEntries(CATEGORIAS.map((c) => [c.id, limitePorCategoria[c.id] ? paraCampo(limitePorCategoria[c.id]) : ""])),
+    );
+    setLimitesInvalidos([]);
+  }
+  // Campo vazio tira o limite; texto que não é valor bloqueia o salvamento e é apontado na linha.
+  function salvarLimites() {
+    const invalidos = CATEGORIAS.filter((c) => rascunhoLimites[c.id].trim() && !lerValor(rascunhoLimites[c.id])).map((c) => c.id);
+    setLimitesInvalidos(invalidos);
+    if (invalidos.length) return;
+    guardarOrcamentos(
+      CATEGORIAS.filter((c) => rascunhoLimites[c.id].trim()).map((c) => {
+        const limite = lerValor(rascunhoLimites[c.id]);
+        const antes = orcamentos.find((o) => o.categoria === c.id);
+        // Limite do exemplo que não foi mexido continua sendo exemplo (e sai com "Apagar exemplo").
+        return antes?.exemplo && antes.limite === limite ? antes : { categoria: c.id, limite };
+      }),
+    );
+    setRascunhoLimites(null);
   }
 
   function adicionar(e) {
@@ -187,6 +220,7 @@ export default function App() {
     const exemplo = dadosDeExemplo(hoje);
     guardar(exemplo.gastos);
     guardarRecorrentes(exemplo.recorrentes);
+    guardarOrcamentos(exemplo.orcamentos);
     setMes(mesAtual);
     setFiltro(null);
   }
@@ -195,6 +229,7 @@ export default function App() {
   function apagarExemplo() {
     guardar(gastos.filter((g) => !g.exemplo));
     guardarRecorrentes(recorrentes.filter((r) => !r.exemplo));
+    guardarOrcamentos(orcamentos.filter((o) => !o.exemplo));
   }
 
   function remover(g) {
@@ -346,6 +381,100 @@ export default function App() {
                 </li>
               ))}
             </ul>
+          </section>
+
+          <section className="bloco bloco-orcamento" aria-labelledby="titulo-orcamento">
+            <div className="bloco-topo">
+              <h2 id="titulo-orcamento" className="rotulo">
+                Orçamento de {nomeMes}
+              </h2>
+              {!rascunhoLimites && (
+                <button type="button" className="botao-texto neutro" onClick={editarLimites}>
+                  {orcamentos.length ? "Editar limites" : "Definir limites"}
+                </button>
+              )}
+            </div>
+
+            {rascunhoLimites ? (
+              <div className="limites">
+                <p className="fraco">Limite por mês. Deixe em branco para não acompanhar a categoria.</p>
+                {CATEGORIAS.map((c) => (
+                  <label key={c.id} className="limite" style={{ "--cor": c.cor }}>
+                    <span className="filtro-nome">
+                      <span className="ponto" />
+                      {c.nome}
+                    </span>
+                    <span className="limite-campo">
+                      <span aria-hidden="true">R$</span>
+                      <input
+                        inputMode="decimal"
+                        placeholder="sem limite"
+                        value={rascunhoLimites[c.id]}
+                        onChange={(e) => setRascunhoLimites({ ...rascunhoLimites, [c.id]: e.target.value })}
+                        onKeyDown={(e) => e.key === "Enter" && salvarLimites()}
+                        aria-invalid={limitesInvalidos.includes(c.id)}
+                      />
+                    </span>
+                  </label>
+                ))}
+                {limitesInvalidos.length > 0 && (
+                  <p className="erro" role="alert">
+                    Confira os campos em vermelho: use valores como 600 ou 150,50.
+                  </p>
+                )}
+                <div className="confirmar-acoes">
+                  <button type="button" className="botao-pequeno" onClick={salvarLimites}>
+                    Salvar limites
+                  </button>
+                  <button type="button" className="botao-contorno" onClick={() => setRascunhoLimites(null)}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : orcamentos.length === 0 ? (
+              <p className="fraco recorrentes-vazio">
+                Defina quanto quer gastar por categoria, e a barra avisa quando estiver perto do limite.
+              </p>
+            ) : (
+              <ul className="orcamentos">
+                {CATEGORIAS.filter((c) => limitePorCategoria[c.id]).map((c) => {
+                  const gasto = porCategoria.find((p) => p.id === c.id).total;
+                  const limite = limitePorCategoria[c.id];
+                  const { pct, restante, nivel } = situacaoOrcamento(gasto, limite);
+                  const porcento = Math.round(pct * 100);
+                  return (
+                    <li key={c.id} className={`orcamento ${nivel}`} style={{ "--cor": c.cor }}>
+                      <div className="orcamento-linha">
+                        <span className="filtro-nome">
+                          <span className="ponto" />
+                          {c.nome}
+                        </span>
+                        <span className="orcamento-valor">
+                          {reais(gasto)} <span className="fraco">de {reais(limite)}</span>
+                        </span>
+                      </div>
+                      <div
+                        className="orcamento-barra"
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={Math.min(porcento, 100)}
+                        aria-label={`${c.nome}: ${porcento}% do limite`}
+                      >
+                        <span style={{ width: `${Math.min(pct, 1) * 100}%` }} />
+                      </div>
+                      <p className="orcamento-status">
+                        {nivel === "estourou"
+                          ? `Passou ${reais(-restante)} do limite`
+                          : restante === 0
+                            ? "Limite atingido"
+                            : `Faltam ${reais(restante)} · ${porcento}%`}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
 
           <section className="bloco bloco-recorrentes" aria-labelledby="titulo-recorrentes">
