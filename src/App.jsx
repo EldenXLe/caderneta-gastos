@@ -16,6 +16,7 @@ import {
   totaisDoAno,
 } from "./gastos";
 import { gerarCSV, lerBackup, montarBackup } from "./backup";
+import { decodificarOFX, lerOFX, sugerirCategoria } from "./ofx";
 
 function baixar(nome, conteudo, tipo) {
   const url = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
@@ -135,6 +136,9 @@ export default function App() {
   const [restauracao, setRestauracao] = useState(null); // backup lido, esperando confirmação
   const [avisoDados, setAvisoDados] = useState(null);
   const arquivoBackup = useRef(null);
+  const arquivoOFX = useRef(null);
+  const [importacao, setImportacao] = useState(null); // extrato lido, esperando revisão
+  const botaoImportar = useRef(null);
   const [repetir, setRepetir] = useState(false);
   const [cancelando, setCancelando] = useState(null);
   const [mes, setMes] = useState(() => hojeISO().slice(0, 7));
@@ -308,6 +312,57 @@ export default function App() {
     setMes(mesAtual);
     setAvisoDados({ tipo: "ok", texto: "Backup restaurado." });
   }
+
+  // O id vem do código único do banco (FITID): importar o mesmo extrato de novo não duplica, nem depois de um backup.
+  const idDoOFX = (fitid) => `ofx-${fitid}`.slice(0, 100);
+
+  async function lerExtrato(e) {
+    const arquivo = e.target.files[0];
+    e.target.value = "";
+    if (!arquivo) return;
+    setAvisoDados(null);
+    if (arquivo.size > 5 * 1024 * 1024) return setAvisoDados({ tipo: "erro", texto: "Arquivo grande demais para um extrato." });
+    const lido = lerOFX(decodificarOFX(new Uint8Array(await arquivo.arrayBuffer())));
+    if (lido.erro) return setAvisoDados({ tipo: "erro", texto: lido.erro });
+    if (lido.gastos.length === 0) return setAvisoDados({ tipo: "erro", texto: "O extrato só tem entradas, nenhum gasto para importar." });
+    const ids = new Set(gastos.map((g) => g.id));
+    setImportacao({
+      entradas: lido.entradas,
+      itens: lido.gastos
+        .map((g) => {
+          const id = idDoOFX(g.fitid);
+          const jaExiste = ids.has(id);
+          return { ...g, id, jaExiste, marcado: !jaExiste, categoria: sugerirCategoria(g.descricao) };
+        })
+        .sort((a, b) => b.data.localeCompare(a.data)),
+    });
+  }
+
+  const mudarItem = (id, mudanca) =>
+    setImportacao((imp) => ({ ...imp, itens: imp.itens.map((i) => (i.id === id ? { ...i, ...mudanca } : i)) }));
+
+  function confirmarImportacao() {
+    const escolhidos = importacao.itens.filter((i) => i.marcado && !i.jaExiste);
+    const agora = Date.now();
+    guardar([
+      ...escolhidos.map(({ id, data, valor, descricao, categoria }, n) => ({ id, data, valor, descricao, categoria, criadoEm: agora - n })),
+      ...gastos,
+    ]);
+    setImportacao(null);
+    setFiltro(null);
+    setMes(escolhidos[0].data.slice(0, 7));
+    setAvisoDados({ tipo: "ok", texto: `${escolhidos.length} ${escolhidos.length === 1 ? "gasto importado" : "gastos importados"} do extrato.` });
+  }
+
+  // Só ao abrir e fechar a revisão (não a cada marcação): foco no botão e Esc para fechar.
+  const revisando = importacao !== null;
+  useEffect(() => {
+    if (!revisando) return;
+    botaoImportar.current?.focus();
+    const fecharNoEsc = (e) => e.key === "Escape" && setImportacao(null);
+    addEventListener("keydown", fecharNoEsc);
+    return () => removeEventListener("keydown", fecharNoEsc);
+  }, [revisando]);
 
   function remover(g) {
     if (!g.recorrenteId) return guardar(gastos.filter((x) => x.id !== g.id));
@@ -679,6 +734,10 @@ export default function App() {
               <button type="button" className="botao-contorno" onClick={() => arquivoBackup.current.click()}>
                 Restaurar backup
               </button>
+              <button type="button" className="botao-contorno" onClick={() => arquivoOFX.current.click()}>
+                Importar extrato do banco (OFX)
+              </button>
+              <input ref={arquivoOFX} type="file" accept=".ofx,application/x-ofx" onChange={lerExtrato} hidden />
               <input
                 ref={arquivoBackup}
                 type="file"
@@ -896,6 +955,83 @@ export default function App() {
         <button type="button" className="botao botao-flutuante" onClick={() => setFormAberto(true)}>
           + Anotar gasto
         </button>
+      )}
+
+      {importacao && (
+        <div className="revisao-fundo" onClick={(e) => e.target === e.currentTarget && setImportacao(null)}>
+          <div className="revisao" role="dialog" aria-modal="true" aria-labelledby="titulo-revisao">
+            <header className="revisao-topo">
+              <h2 id="titulo-revisao">Revisar o extrato</h2>
+              <p className="fraco">
+                {importacao.itens.length} {importacao.itens.length === 1 ? "gasto encontrado" : "gastos encontrados"}
+                {importacao.itens.some((i) => i.jaExiste) &&
+                  ` · ${importacao.itens.filter((i) => i.jaExiste).length} já estavam na caderneta`}
+                {importacao.entradas > 0 &&
+                  ` · ${importacao.entradas} ${importacao.entradas === 1 ? "entrada ignorada" : "entradas ignoradas"}`}
+                . Confira as categorias e desmarque o
+                que não quiser trazer.
+              </p>
+            </header>
+
+            <ul className="revisao-lista">
+              {importacao.itens.map((i) => (
+                <li key={i.id} className={i.jaExiste ? "ja-existe" : ""}>
+                  <input
+                    type="checkbox"
+                    checked={i.marcado}
+                    disabled={i.jaExiste}
+                    onChange={(e) => mudarItem(i.id, { marcado: e.target.checked })}
+                    aria-label={`Importar ${i.descricao}, ${reais(i.valor)}`}
+                  />
+                  <span className="revisao-data">
+                    {i.data.slice(8)}/{i.data.slice(5, 7)}
+                  </span>
+                  <span className="revisao-descricao">{i.descricao}</span>
+                  {i.jaExiste ? (
+                    <span className="fraco revisao-ja">já importado</span>
+                  ) : (
+                    <select
+                      value={i.categoria}
+                      onChange={(e) => mudarItem(i.id, { categoria: e.target.value })}
+                      aria-label={`Categoria de ${i.descricao}`}
+                      style={{ "--cor": porId[i.categoria].cor }}
+                    >
+                      {CATEGORIAS.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <span className="valor">{reais(i.valor)}</span>
+                </li>
+              ))}
+            </ul>
+
+            <footer className="confirmar-acoes revisao-acoes">
+              {(() => {
+                const escolhidos = importacao.itens.filter((i) => i.marcado && !i.jaExiste);
+                return (
+                  <>
+                    <button
+                      ref={botaoImportar}
+                      type="button"
+                      className="botao-pequeno"
+                      onClick={confirmarImportacao}
+                      disabled={escolhidos.length === 0}
+                    >
+                      Importar {escolhidos.length} {escolhidos.length === 1 ? "gasto" : "gastos"} ·{" "}
+                      {reais(escolhidos.reduce((s, i) => s + i.valor, 0))}
+                    </button>
+                    <button type="button" className="botao-contorno" onClick={() => setImportacao(null)}>
+                      Cancelar
+                    </button>
+                  </>
+                );
+              })()}
+            </footer>
+          </div>
+        </div>
       )}
     </div>
   );

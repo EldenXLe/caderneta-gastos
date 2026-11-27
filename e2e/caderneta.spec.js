@@ -102,7 +102,7 @@ test("exporta CSV, baixa backup e restaura (recusando arquivo inválido)", async
   await page.getByRole("button", { name: "Apagar exemplo" }).click();
   await expect(page.locator(".lancamento")).toHaveCount(0);
 
-  const arquivo = page.locator('input[type="file"]');
+  const arquivo = page.locator('input[type="file"][accept*="json"]');
   await arquivo.setInputFiles({ name: "x.json", mimeType: "application/json", buffer: Buffer.from('{"app":"outro"}') });
   await expect(page.locator(".aviso-dados")).toHaveText("Esse arquivo não é um backup da Caderneta.");
 
@@ -134,4 +134,32 @@ test("sem internet, recarrega e continua tudo lá", async ({ page, context }) =>
   await page.reload();
   await expect(page.locator(".total")).toHaveText("R$ 1.236,20");
   await expect(page.getByRole("status").filter({ hasText: "Offline" })).toBeVisible();
+});
+
+test("importa extrato OFX com revisão, sem estragar acentos e sem duplicar", async ({ page }) => {
+  const extrato = new URL("./fixtures/extrato-exemplo.ofx", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+  const arquivo = page.locator('input[type="file"][accept*="ofx"]');
+
+  await arquivo.setInputFiles(extrato);
+  const revisao = page.getByRole("dialog", { name: "Revisar o extrato" });
+  await expect(revisao).toContainText("5 gastos encontrados");
+  await expect(revisao).toContainText("1 entrada ignorada");
+  await expect(revisao.getByLabel("Categoria de IFOOD *Padaria São João")).toHaveValue("restaurante");
+  await expect(revisao.getByLabel("Categoria de NETFLIX.COM")).toHaveValue("assinaturas");
+  await expect(revisao.getByLabel("Categoria de PIX ENVIADO JOAO")).toHaveValue("outros");
+
+  await revisao.getByLabel("Importar PIX ENVIADO JOAO, R$ 250,00").uncheck();
+  await revisao.getByLabel("Categoria de DROGASIL 1234").selectOption("saude");
+  await revisao.getByRole("button", { name: "Importar 4 gastos · R$ 196,30" }).click();
+
+  await expect(revisao).toBeHidden();
+  await expect(lancamento(page, "IFOOD *Padaria São João")).toContainText("R$ 32,90");
+  await expect(page.locator(".total")).toHaveText("R$ 196,30");
+
+  // O mesmo extrato de novo: o que já entrou aparece como importado e só o Pix fica disponível.
+  await arquivo.setInputFiles(extrato);
+  await expect(revisao).toContainText("4 já estavam na caderneta");
+  await expect(revisao.getByRole("button", { name: "Importar 1 gasto · R$ 250,00" })).toBeVisible();
+  await revisao.getByRole("button", { name: "Cancelar" }).click();
+  await expect(page.locator(".lancamento")).toHaveCount(4);
 });
