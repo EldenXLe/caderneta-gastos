@@ -228,7 +228,11 @@ p {
 .resumo {
   grid-area: resumo;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 28px;
+}
+.resumo > * {
+  min-width: 0; /* descrições longas (sem quebra) do extrato não podem alargar a coluna lateral */
 }
 .folha {
   grid-area: folha;

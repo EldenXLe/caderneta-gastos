@@ -184,3 +184,21 @@ test("importa extrato OFX separando gasto, investimento, fatura e transferência
 test("extrato longo: a revisão cabe na tela e a lista rola até o último gasto", async ({ page }) => {
   await conferirRolagemDaRevisao(page, expect);
 });
+
+test("descrições longas do banco não fazem a coluna lateral invadir a folha", async ({ page }) => {
+  await page.setViewportSize({ width: 1317, height: 900 });
+  const memos = [
+    'Aplicação no investimento: "Caixinha Reserva de Emergência do Leandro para viagem de fim de ano"',
+    'Compra no debito: "No estabelecimento SUPERMERCADO BOM PRECO LTDA FILIAL 12"',
+  ];
+  const linhas = memos.map((m, i) => `<STMTTRN><DTPOSTED>2026111${i}<TRNAMT>-${50 + i}.00<FITID>W${i}<MEMO>${m}</STMTTRN>`);
+  await page.locator('input[type="file"][accept*="ofx"]').setInputFiles({ name: "longo.ofx", mimeType: "application/x-ofx", buffer: Buffer.from(`<OFX>${linhas.join("")}</OFX>`) });
+  await page.getByRole("dialog").getByRole("button", { name: /Importar/ }).click();
+  await expect(page.locator(".guardado-total")).toHaveText("R$ 50,00");
+
+  const { maisADireita, folha } = await page.evaluate(() => ({
+    maisADireita: Math.max(...[...document.querySelectorAll(".resumo *")].map((e) => e.getBoundingClientRect().right)),
+    folha: document.querySelector(".folha").getBoundingClientRect().left,
+  }));
+  expect(maisADireita).toBeLessThan(folha);
+});
