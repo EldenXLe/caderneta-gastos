@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { abrir, carregarExemplo, lancamento } from "./ajuda";
+import { abrir, carregarExemplo, lancamento, conferirRolagemDaRevisao } from "./ajuda";
 
 test.beforeEach(async ({ page }) => abrir(page));
 
@@ -28,4 +28,8 @@ test("no celular, o mês atual fica à vista e a página não rola de lado", asy
     larguraTela: document.documentElement.clientWidth,
   }));
   expect(larguraConteudo).toBeLessThanOrEqual(larguraTela);
+});
+
+test("extrato longo: a revisão cabe na tela e a lista rola até o último gasto", async ({ page }) => {
+  await conferirRolagemDaRevisao(page, expect);
 });

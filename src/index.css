@@ -1418,8 +1418,9 @@ p {
   position: fixed;
   inset: 0;
   z-index: 40;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 24px 16px;
   background: rgb(10 12 20 / 0.5);
 }
@@ -1428,9 +1429,10 @@ body:has(.revisao-fundo) {
 }
 .revisao {
   width: min(720px, 100%);
-  max-height: 100%;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* Altura presa à tela: a lista fica com o que sobra e rola por dentro (100% de um grid não limitava nada). */
+  max-height: calc(100dvh - 48px);
+  display: flex;
+  flex-direction: column;
   background: var(--folha);
   border: 1px solid var(--linha);
   border-radius: 16px;
@@ -1455,7 +1457,10 @@ body:has(.revisao-fundo) {
   list-style: none;
   margin: 0;
   padding: 4px 22px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .revisao-lista li {
   display: grid;
@@ -1513,7 +1518,7 @@ body:has(.revisao-fundo) {
 }
 @media (max-width: 820px) {
   .revisao-fundo {
-    place-items: end stretch;
+    align-items: flex-end;
     padding: 0;
   }
   .revisao {

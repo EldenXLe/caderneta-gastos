@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { aba, abrir, anotar, carregarExemplo, lancamento } from "./ajuda";
+import { aba, abrir, anotar, carregarExemplo, lancamento, conferirRolagemDaRevisao } from "./ajuda";
 
 test.beforeEach(async ({ page }) => abrir(page));
 
@@ -162,4 +162,8 @@ test("importa extrato OFX com revisão, sem estragar acentos e sem duplicar", as
   await expect(revisao.getByRole("button", { name: "Importar 1 gasto · R$ 250,00" })).toBeVisible();
   await revisao.getByRole("button", { name: "Cancelar" }).click();
   await expect(page.locator(".lancamento")).toHaveCount(4);
+});
+
+test("extrato longo: a revisão cabe na tela e a lista rola até o último gasto", async ({ page }) => {
+  await conferirRolagemDaRevisao(page, expect);
 });

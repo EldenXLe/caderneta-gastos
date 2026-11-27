@@ -21,3 +21,27 @@ export async function anotar(page, { valor, categoria, descricao, repetir }) {
 
 export const lancamento = (page, texto) => page.locator(".lancamento", { hasText: texto });
 export const aba = (page, mes) => page.locator(".aba", { hasText: mes });
+
+/** Extrato com muitos gastos, para testar a rolagem da revisão. */
+export function extratoLongo(quantidade = 40) {
+  const linhas = Array.from(
+    { length: quantidade },
+    (_, i) =>
+      `<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>202611${String((i % 25) + 1).padStart(2, "0")}<TRNAMT>-${10 + i}.00<FITID>L${i}<MEMO>Compra ${i + 1}</STMTTRN>`,
+  );
+  return { name: "longo.ofx", mimeType: "application/x-ofx", buffer: Buffer.from(`<OFX>\n${linhas.join("\n")}\n</OFX>`) };
+}
+
+/** A janela de revisão cabe na tela e o último gasto da lista dá para alcançar rolando. */
+export async function conferirRolagemDaRevisao(page, expect) {
+  await page.locator('input[type="file"][accept*="ofx"]').setInputFiles(extratoLongo());
+  const revisao = page.getByRole("dialog", { name: "Revisar o extrato" });
+  await expect(revisao).toContainText("40 gastos encontrados");
+  await expect(revisao.getByRole("button", { name: /Importar 40 gastos/ })).toBeInViewport();
+
+  const ultimo = revisao.locator(".revisao-lista li").last();
+  await expect(ultimo).not.toBeInViewport();
+  await ultimo.scrollIntoViewIfNeeded();
+  await expect(ultimo).toBeInViewport();
+  await expect(revisao.getByRole("button", { name: /Importar 40 gastos/ })).toBeInViewport();
+}
