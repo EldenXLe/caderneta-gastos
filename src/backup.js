@@ -4,8 +4,12 @@ const VERSAO = 1;
 const IDS = new Set(CATEGORIAS.map((c) => c.id));
 const nomeCategoria = Object.fromEntries(CATEGORIAS.map((c) => [c.id, c.nome]));
 
-export function montarBackup({ gastos, recorrentes, orcamentos }, agora = new Date()) {
-  return JSON.stringify({ app: "caderneta", versao: VERSAO, exportadoEm: agora.toISOString(), gastos, recorrentes, orcamentos }, null, 2);
+export function montarBackup({ gastos, recorrentes, orcamentos, guardado = [], regras = [] }, agora = new Date()) {
+  return JSON.stringify(
+    { app: "caderneta", versao: VERSAO, exportadoEm: agora.toISOString(), gastos, recorrentes, orcamentos, guardado, regras },
+    null,
+    2,
+  );
 }
 
 // ---------- validação: o arquivo vem de fora, então cada campo é conferido e só o que conhecemos é copiado ----------
@@ -45,6 +49,18 @@ function recorrenteValida(r) {
   };
 }
 
+function guardadoValido(g) {
+  if (!g || !texto(g.id, 100) || !centavos(g.valor) || !dataISO(g.data) || !texto(g.descricao, 200)) return null;
+  if (g.direcao !== "aplicacao" && g.direcao !== "resgate") return null;
+  return { id: g.id, valor: g.valor, data: g.data, descricao: g.descricao, direcao: g.direcao };
+}
+
+export const TIPOS_REGRA = new Set(["gasto", "investimento", "fatura", "transferencia", "resgate", "ignorar"]);
+function regraValida(r) {
+  if (!r || !texto(r.chave, 200) || !/^[a-z ]+$/.test(r.chave) || !TIPOS_REGRA.has(r.tipo) || !IDS.has(r.categoria)) return null;
+  return { chave: r.chave, tipo: r.tipo, categoria: r.categoria };
+}
+
 function orcamentoValido(o) {
   if (!o || !IDS.has(o.categoria) || !centavos(o.limite)) return null;
   return { categoria: o.categoria, limite: o.limite, ...(o.exemplo === true && { exemplo: true }) };
@@ -65,11 +81,16 @@ export function lerBackup(conteudo) {
   const gastos = obj.gastos.map(gastoValido);
   const recorrentes = obj.recorrentes.map(recorrenteValida);
   const orcamentos = obj.orcamentos.map(orcamentoValido);
+  // Backups antigos não têm guardado nem regras: valem como listas vazias.
+  if (![obj.guardado ?? [], obj.regras ?? []].every(Array.isArray)) return { erro: "O backup tem dados corrompidos e não foi restaurado." };
+  const guardado = (obj.guardado ?? []).map(guardadoValido);
+  const regras = (obj.regras ?? []).map(regraValida);
   // Um item estragado invalida tudo: restaurar pela metade seria pior do que não restaurar.
-  if ([...gastos, ...recorrentes, ...orcamentos].includes(null)) return { erro: "O backup tem dados corrompidos e não foi restaurado." };
+  if ([...gastos, ...recorrentes, ...orcamentos, ...guardado, ...regras].includes(null))
+    return { erro: "O backup tem dados corrompidos e não foi restaurado." };
   if (new Set(orcamentos.map((o) => o.categoria)).size !== orcamentos.length) return { erro: "O backup tem limites repetidos." };
 
-  return { dados: { gastos, recorrentes, orcamentos }, exportadoEm: typeof obj.exportadoEm === "string" ? obj.exportadoEm : null };
+  return { dados: { gastos, recorrentes, orcamentos, guardado, regras }, exportadoEm: typeof obj.exportadoEm === "string" ? obj.exportadoEm : null };
 }
 
 // ---------- CSV no padrão do Excel brasileiro: ";" separa colunas, vírgula nos centavos, BOM para os acentos ----------

@@ -1552,3 +1552,100 @@ body:has(.revisao-fundo) {
     padding-bottom: calc(18px + env(safe-area-inset-bottom));
   }
 }
+
+/* Revisão com tipo (gasto, investimento, fatura, transferência) */
+.revisao {
+  width: min(900px, 100%);
+}
+.revisao-lista li {
+  grid-template-columns: auto 52px minmax(0, 1fr) 190px 150px 112px; /* valor com largura fixa: as colunas alinham entre as linhas */
+}
+.revisao-lista li.fora .revisao-descricao,
+.revisao-lista li.fora .valor {
+  color: var(--fraco);
+  text-decoration: line-through;
+}
+.revisao-tipo {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--linha);
+  border-radius: 8px;
+  background: var(--papel);
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--tinta);
+}
+span.revisao-categoria {
+  font-size: 0.78rem;
+  font-style: italic;
+}
+.revisao-regra {
+  color: var(--margem);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+}
+
+/* Guardado no mês (investimentos) */
+.guardado-total {
+  font-family: var(--serifa);
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ok);
+}
+.guardado-detalhe {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+.guardado-lista {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--linha);
+}
+.guardado-lista li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  border-bottom: 1px solid var(--linha);
+  font-size: 0.85rem;
+}
+.guardado-descricao {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.guardado-lista .valor {
+  font-size: 0.8rem;
+}
+.guardado-lista .valor.aplicacao {
+  color: var(--ok);
+}
+.guardado-lista .apagar {
+  opacity: 1;
+}
+
+@media (max-width: 820px) {
+  .bloco-guardado {
+    order: 2;
+  }
+  .revisao-lista li {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "marca descricao valor"
+      "marca data data"
+      "marca tipo tipo"
+      "marca categoria categoria";
+  }
+  /* Mais específico que ".revisao-lista select" (que punha os dois selects no mesmo lugar). */
+  .revisao-lista .revisao-tipo {
+    grid-area: tipo;
+  }
+  .revisao-lista .revisao-categoria {
+    grid-area: categoria;
+  }
+}

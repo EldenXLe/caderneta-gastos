@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodificarOFX, lerOFX, sugerirCategoria } from "./ofx";
+import { chaveDaRegra, classificarTipo, decodificarOFX, lerOFX, sugerirCategoria } from "./ofx";
 
 // OFX 1.x (SGML) como os bancos exportam: cabeçalho em texto, tags de valor sem fechamento.
 const SGML = `OFXHEADER:100
@@ -34,11 +34,11 @@ CHARSET:1252
 </OFX>`;
 
 describe("lerOFX", () => {
-  const { gastos, entradas } = lerOFX(SGML);
+  const { saidas: gastos, entradas } = lerOFX(SGML);
 
-  it("transforma só as saídas em gastos, em centavos positivos", () => {
+  it("separa saídas e entradas, com valores positivos em centavos", () => {
     expect(gastos).toHaveLength(2);
-    expect(entradas).toBe(1);
+    expect(entradas).toEqual([{ fitid: "A2", data: "2026-11-05", valor: 350000, descricao: "Salário" }]);
     expect(gastos[0]).toEqual({ fitid: "A1", data: "2026-11-24", valor: 3290, descricao: "IFOOD *Restaurante São João" });
   });
 
@@ -51,7 +51,7 @@ describe("lerOFX", () => {
 <OFX><CREDITCARDMSGSRSV1><CCSTMTTRNRS><CCSTMTRS><BANKTRANLIST>
 <STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20261103</DTPOSTED><TRNAMT>-55.90</TRNAMT><FITID>X9</FITID><MEMO>NETFLIX.COM</MEMO></STMTTRN>
 </BANKTRANLIST></CCSTMTRS></CCSTMTTRNRS></CREDITCARDMSGSRSV1></OFX>`;
-    expect(lerOFX(xml).gastos).toEqual([{ fitid: "X9", data: "2026-11-03", valor: 5590, descricao: "NETFLIX.COM" }]);
+    expect(lerOFX(xml).saidas).toEqual([{ fitid: "X9", data: "2026-11-03", valor: 5590, descricao: "NETFLIX.COM" }]);
   });
 
   it("sem FITID, gera um código estável e diferencia compras iguais no mesmo dia", () => {
@@ -59,9 +59,9 @@ describe("lerOFX", () => {
 <STMTTRN><DTPOSTED>20261101<TRNAMT>-10.00<MEMO>Café</STMTTRN>
 <STMTTRN><DTPOSTED>20261101<TRNAMT>-10.00<MEMO>Café</STMTTRN>
 </OFX>`;
-    const ids = lerOFX(semId).gastos.map((g) => g.fitid);
+    const ids = lerOFX(semId).saidas.map((g) => g.fitid);
     expect(ids).toEqual(["2026-11-01|-1000|Café", "2026-11-01|-1000|Café#1"]);
-    expect(lerOFX(semId).gastos.map((g) => g.fitid)).toEqual(ids); // mesmo arquivo, mesmos códigos
+    expect(lerOFX(semId).saidas.map((g) => g.fitid)).toEqual(ids); // mesmo arquivo, mesmos códigos
   });
 
   it("recusa o que não é extrato e movimentação com dado inválido", () => {
@@ -93,4 +93,40 @@ describe("sugerirCategoria", () => {
     ["Aluguel & condomínio", "casa"],
     ["PIX ENVIADO JOSE", "outros"],
   ])("%s → %s", (descricao, categoria) => expect(sugerirCategoria(descricao)).toBe(categoria));
+});
+
+describe("NAME e MEMO juntos", () => {
+  const ler = (memo, nome) => lerOFX(`<OFX><STMTTRN><DTPOSTED>20261101<TRNAMT>-5<MEMO>${memo}<NAME>${nome}</STMTTRN></OFX>`).saidas[0].descricao;
+  it("junta quando um completa o outro e não repete quando um contém o outro", () => {
+    expect(ler("PIX ENVIADO", "Maria Souza")).toBe("PIX ENVIADO · Maria Souza");
+    expect(ler("UBER *TRIP", "UBER")).toBe("UBER *TRIP");
+  });
+});
+
+describe("classificarTipo", () => {
+  it.each([
+    ["APLICACAO CDB", "investimento"],
+    ["Aplicação RDB", "investimento"],
+    ["TESOURO DIRETO", "investimento"],
+    ["Dinheiro guardado na Caixinha", "investimento"],
+    ["PAGAMENTO DE FATURA", "fatura"],
+    ["PAG FATURA CARTAO", "fatura"],
+    ["TED MESMA TITULARIDADE", "transferencia"],
+    ["IFOOD *Padaria", "gasto"],
+    ["PIX ENVIADO · Maria", "gasto"],
+  ])("saída %s → %s", (texto, tipo) => expect(classificarTipo(texto, false)).toBe(tipo));
+
+  it("entradas: resgate de investimento entra, o resto fica de fora", () => {
+    expect(classificarTipo("RESGATE CDB", true)).toBe("resgate");
+    expect(classificarTipo("Retirada da Caixinha", true)).toBe("resgate");
+    expect(classificarTipo("Salário", true)).toBeNull();
+    expect(classificarTipo("PIX RECEBIDO", true)).toBeNull();
+  });
+});
+
+describe("chaveDaRegra", () => {
+  it("ignora acento, número e símbolo, para a regra valer nos próximos meses", () => {
+    expect(chaveDaRegra("PIX ENVIADO · Maria 123")).toBe("pix enviado maria");
+    expect(chaveDaRegra("Pix enviado - MARIA 987")).toBe(chaveDaRegra("PIX ENVIADO · Maria 123"));
+  });
 });

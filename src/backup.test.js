@@ -7,7 +7,7 @@ const exemplo = dadosDeExemplo("2026-11-25");
 describe("backup", () => {
   it("o que sai no backup volta igual na restauração", () => {
     const { dados, exportadoEm } = lerBackup(montarBackup(exemplo, new Date("2026-11-25T12:00:00Z")));
-    expect(dados).toEqual(exemplo);
+    expect(dados).toEqual({ ...exemplo, guardado: [], regras: [] });
     expect(exportadoEm).toBe("2026-11-25T12:00:00.000Z");
   });
 
@@ -61,4 +61,32 @@ describe("CSV", () => {
   });
   it("põe entre aspas o texto que tem ;", () => expect(linhas[3]).toBe('24/11/2026;"Almoço; com o time";Restaurante;32,90;'));
   it("neutraliza fórmulas (injeção de CSV)", () => expect(linhas[2]).toBe(`12/11/2026;"'=HYPERLINK(""x"")";Outros;1000,00;`));
+});
+
+describe("backup com guardado e regras", () => {
+  const guardado = [{ id: "ofx-G1", data: "2026-11-10", valor: 50000, descricao: "APLICACAO CDB", direcao: "aplicacao" }];
+  const regras = [{ chave: "pix enviado maria", tipo: "transferencia", categoria: "outros" }];
+
+  it("vão e voltam iguais", () => {
+    const { dados } = lerBackup(montarBackup({ ...exemplo, guardado, regras }));
+    expect(dados.guardado).toEqual(guardado);
+    expect(dados.regras).toEqual(regras);
+  });
+  it("backup antigo, sem esses campos, continua restaurando", () => {
+    const antigo = JSON.parse(montarBackup(exemplo));
+    delete antigo.guardado;
+    delete antigo.regras;
+    expect(lerBackup(JSON.stringify(antigo)).dados.guardado).toEqual([]);
+  });
+  it("recusa guardado ou regra inválidos", () => {
+    const comErro = (mudanca) => {
+      const b = JSON.parse(montarBackup({ ...exemplo, guardado, regras }));
+      mudanca(b);
+      return lerBackup(JSON.stringify(b)).erro;
+    };
+    expect(comErro((b) => (b.guardado[0].direcao = "saque"))).toMatch(/corrompidos/);
+    expect(comErro((b) => (b.regras[0].tipo = "qualquer"))).toMatch(/corrompidos/);
+    expect(comErro((b) => (b.regras[0].chave = "__proto__"))).toMatch(/corrompidos/);
+    expect(comErro((b) => (b.regras = {}))).toMatch(/corrompidos/);
+  });
 });

@@ -15,7 +15,12 @@ Um PWA (Progressive Web App) para anotar os gastos do mês por categoria. Ele **
 - Organiza os lançamentos por dia, com o subtotal de cada dia, e tem abas de janeiro a dezembro com o total de cada mês.
 - Tem **orçamento por categoria**: você define um limite por mês, e uma barra mostra quanto já foi. Ela muda de cor a partir de 80% e de novo quando passa do limite, dizendo quanto falta ou quanto passou.
 - **Exporta o mês em CSV** e faz **backup e restauração** num arquivo, para os dados não ficarem presos a um aparelho.
-- **Importa o extrato do banco (OFX)**, da conta ou do cartão. Só as saídas viram gasto, com a categoria sugerida pela descrição (iFood vira Restaurante, Uber vira Transporte). Antes de salvar, uma tela de revisão deixa desmarcar itens e trocar categorias. Importar o mesmo extrato de novo não duplica nada.
+- **Importa o extrato do banco (OFX)**, da conta ou do cartão, e separa cada movimentação por tipo:
+  - **gasto**, com a categoria sugerida pela descrição (iFood vira Restaurante, Uber vira Transporte);
+  - **investimento e resgate**, que vão para **"Guardado no mês"**, fora das despesas;
+  - **pagamento de fatura e transferência entre as próprias contas**, que ficam de fora para o mesmo dinheiro não contar duas vezes.
+
+  Antes de salvar, uma tela de revisão deixa trocar o tipo e a categoria de cada item. **As correções viram regra**, e os próximos extratos já chegam com elas aplicadas. Importar o mesmo extrato de novo não duplica nada.
 - Tem **cobranças recorrentes**: ao anotar com "Repetir todo mês" (ideal para a categoria Assinaturas), os meses seguintes se preenchem sozinhos e aparecem como previsão. "Pular mês" pausa só aquele mês e pode ser desfeito. "Cancelar" pede confirmação na própria página, explicando quais meses ficam e quais saem: se a cobrança do mês já caiu, ela fica no histórico. O cancelamento também pode ser desfeito.
 - Abre e funciona **offline**: um service worker guarda o app inteiro no aparelho.
 - É instalável: tem manifest, ícones e um botão "Instalar app" quando o navegador oferece.

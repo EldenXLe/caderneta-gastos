@@ -50,33 +50,66 @@ function dataOFX(texto) {
 }
 
 /**
- * Devolve { gastos: [{ fitid, data, valor, descricao }], entradas } ou { erro }.
- * Só as saídas viram gasto (valor positivo, em centavos); entradas (salário, Pix recebido, estorno) são contadas e ignoradas.
+ * Devolve { saidas, entradas } (listas de { fitid, data, valor, descricao }, valor positivo em centavos) ou { erro }.
+ * Quem chama decide o tipo de cada uma (classificarTipo) e o que entra na caderneta.
  */
 export function lerOFX(texto) {
   if (!/<OFX>/i.test(texto)) return { erro: "Esse arquivo não parece um extrato OFX." };
   const blocos = [...texto.matchAll(/<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi)].map((m) => m[1]);
   if (blocos.length === 0) return { erro: "O extrato não tem nenhuma movimentação." };
 
-  const gastos = [];
+  const saidas = [];
+  const entradas = [];
   const vistos = new Map();
-  let entradas = 0;
   for (const bloco of blocos) {
     const valor = centavosOFX(campo(bloco, "TRNAMT"));
     const data = dataOFX(campo(bloco, "DTPOSTED"));
     if (valor === null || !data) return { erro: "O extrato tem uma movimentação com valor ou data inválidos." };
-    if (valor >= 0) {
-      entradas++;
-      continue;
-    }
-    const descricao = (campo(bloco, "MEMO") || campo(bloco, "NAME") || "Gasto importado").slice(0, 80);
+    if (valor === 0) continue;
+    const descricao = juntarDescricao(campo(bloco, "MEMO"), campo(bloco, "NAME")).slice(0, 80) || "Movimentação importada";
     // Sem FITID (raro), monta um código estável com os dados; repetições iguais no mesmo dia ganham um contador.
     const base = campo(bloco, "FITID") || `${data}|${valor}|${descricao}`;
     const n = vistos.get(base) ?? 0;
     vistos.set(base, n + 1);
-    gastos.push({ fitid: n ? `${base}#${n}` : base, data, valor: -valor, descricao });
+    (valor < 0 ? saidas : entradas).push({ fitid: n ? `${base}#${n}` : base, data, valor: Math.abs(valor), descricao });
   }
-  return { gastos, entradas };
+  return { saidas, entradas };
+}
+
+/** Alguns bancos põem o tipo no MEMO ("PIX ENVIADO") e quem recebeu no NAME; outros repetem. Junta sem repetir. */
+function juntarDescricao(memo, nome) {
+  if (!memo || !nome) return memo || nome;
+  const a = semAcento(memo);
+  const b = semAcento(nome);
+  if (a.includes(b)) return memo;
+  if (b.includes(a)) return nome;
+  return `${memo} · ${nome}`;
+}
+
+// Padrões comuns nos extratos brasileiros (sem acento, minúsculo). Investir e resgatar não é gastar nem ganhar.
+const INVESTIMENTO = /\b(aplic|aplicacao|investimento|invest|cdb|rdb|lci|lca|tesouro|poupanca|caixinha|porquinho|cofrinho|renda fixa|previdencia)\b/;
+const RESGATE = /\b(resgate|resg|retirada (da |de )?caixinha|resgate (cdb|rdb|poupanca))\b/;
+const FATURA = /\b(fatura|pagamento cartao|pagto cartao|pgto cartao|pag cartao)\b/;
+const TRANSFERENCIA = /\b(mesma titularidade|entre contas|conta propria|transf(erencia)? propria)\b/;
+
+/**
+ * Tipo sugerido pelo texto. Saídas: "gasto", "investimento", "fatura" ou "transferencia".
+ * Entradas: "resgate" (dinheiro voltando de investimento) ou null (salário, Pix recebido: fica de fora).
+ */
+export function classificarTipo(descricao, entrada) {
+  const t = semAcento(descricao);
+  if (entrada) return RESGATE.test(t) ? "resgate" : null;
+  if (FATURA.test(t)) return "fatura";
+  if (INVESTIMENTO.test(t)) return "investimento";
+  if (TRANSFERENCIA.test(t)) return "transferencia";
+  return "gasto";
+}
+
+/** Chave das regras aprendidas: o texto sem acento, números e símbolos ("PIX ENVIADO MARIA 123" → "pix enviado maria"). */
+export function chaveDaRegra(descricao) {
+  return semAcento(descricao)
+    .replace(/[^a-z]+/g, " ")
+    .trim();
 }
 
 // Palavras sem acento; a primeira que aparecer na descrição decide. Sem palavra conhecida, fica "outros".

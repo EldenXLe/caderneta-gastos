@@ -36,7 +36,7 @@ export function extratoLongo(quantidade = 40) {
 export async function conferirRolagemDaRevisao(page, expect) {
   await page.locator('input[type="file"][accept*="ofx"]').setInputFiles(extratoLongo());
   const revisao = page.getByRole("dialog", { name: "Revisar o extrato" });
-  await expect(revisao).toContainText("40 gastos encontrados");
+  await expect(revisao).toContainText("40 gastos");
   await expect(revisao.getByRole("button", { name: /Importar 40 gastos/ })).toBeInViewport();
 
   const ultimo = revisao.locator(".revisao-lista li").last();

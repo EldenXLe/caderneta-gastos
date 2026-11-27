@@ -136,30 +136,47 @@ test("sem internet, recarrega e continua tudo lá", async ({ page, context }) =>
   await expect(page.getByRole("status").filter({ hasText: "Offline" })).toBeVisible();
 });
 
-test("importa extrato OFX com revisão, sem estragar acentos e sem duplicar", async ({ page }) => {
+test("importa extrato OFX separando gasto, investimento, fatura e transferência, e aprende com as correções", async ({ page }) => {
   const extrato = new URL("./fixtures/extrato-exemplo.ofx", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
   const arquivo = page.locator('input[type="file"][accept*="ofx"]');
+  const revisao = page.getByRole("dialog", { name: "Revisar o extrato" });
 
   await arquivo.setInputFiles(extrato);
-  const revisao = page.getByRole("dialog", { name: "Revisar o extrato" });
-  await expect(revisao).toContainText("5 gastos encontrados");
-  await expect(revisao).toContainText("1 entrada ignorada");
+  for (const resumo of ["5 gastos", "1 investimento", "1 resgate", "1 pagamento de fatura", "1 transferência entre contas", "1 entrada ignorada"])
+    await expect(revisao).toContainText(resumo);
   await expect(revisao.getByLabel("Categoria de IFOOD *Padaria São João")).toHaveValue("restaurante");
-  await expect(revisao.getByLabel("Categoria de NETFLIX.COM")).toHaveValue("assinaturas");
-  await expect(revisao.getByLabel("Categoria de PIX ENVIADO JOAO")).toHaveValue("outros");
+  await expect(revisao.getByLabel("Tipo de APLICACAO CDB")).toHaveValue("investimento");
+  await expect(revisao.getByLabel("Tipo de RESGATE CDB")).toHaveValue("resgate");
+  await expect(revisao.getByLabel("Tipo de PAGAMENTO DE FATURA")).toHaveValue("fatura");
+  await expect(revisao.getByLabel("Importar PAGAMENTO DE FATURA, R$ 1.200,00")).not.toBeChecked();
+  await expect(revisao.getByLabel("Importar TED MESMA TITULARIDADE, R$ 300,00")).not.toBeChecked();
 
-  await revisao.getByLabel("Importar PIX ENVIADO JOAO, R$ 250,00").uncheck();
-  await revisao.getByLabel("Categoria de DROGASIL 1234").selectOption("saude");
-  await revisao.getByRole("button", { name: "Importar 4 gastos · R$ 196,30" }).click();
+  // Correções: o Pix era para a própria conta, e o Uber foi lazer.
+  await revisao.getByLabel("Tipo de PIX ENVIADO JOAO").selectOption("transferencia");
+  await revisao.getByLabel("Categoria de UBER *TRIP").selectOption("lazer");
+  await revisao.getByRole("button", { name: "Importar 4 gastos e 2 movimentações de investimento" }).click();
 
   await expect(revisao).toBeHidden();
+  await expect(page.locator(".aviso-dados")).toContainText("2 regras aprendidas");
   await expect(lancamento(page, "IFOOD *Padaria São João")).toContainText("R$ 32,90");
   await expect(page.locator(".total")).toHaveText("R$ 196,30");
+  await expect(page.locator(".guardado-total")).toHaveText("R$ 300,00");
 
-  // O mesmo extrato de novo: o que já entrou aparece como importado e só o Pix fica disponível.
+  // Um extrato novo com os mesmos textos já chega com as correções aplicadas.
+  const linhas = [
+    "<STMTTRN><DTPOSTED>20261125<TRNAMT>-100.00<FITID>N1<MEMO>PIX ENVIADO JOAO</STMTTRN>",
+    "<STMTTRN><DTPOSTED>20261125<TRNAMT>-20.00<FITID>N2<MEMO>UBER *TRIP</STMTTRN>",
+  ];
+  await arquivo.setInputFiles({ name: "novo.ofx", mimeType: "application/x-ofx", buffer: Buffer.from(`<OFX>${linhas.join("")}</OFX>`) });
+  await expect(revisao.getByLabel("Tipo de PIX ENVIADO JOAO")).toHaveValue("transferencia");
+  await expect(revisao.getByLabel("Categoria de UBER *TRIP")).toHaveValue("lazer");
+  await expect(revisao).toContainText("regra sua");
+  await revisao.getByRole("button", { name: "Cancelar" }).click();
+
+  // O mesmo extrato de novo não duplica nada.
   await arquivo.setInputFiles(extrato);
-  await expect(revisao).toContainText("4 já estavam na caderneta");
-  await expect(revisao.getByRole("button", { name: "Importar 1 gasto · R$ 250,00" })).toBeVisible();
+  await expect(revisao).toContainText("6 já estavam na caderneta");
+  await expect(revisao.getByRole("button", { name: "Nada marcado" })).toBeDisabled();
   await revisao.getByRole("button", { name: "Cancelar" }).click();
   await expect(page.locator(".lancamento")).toHaveCount(4);
 });

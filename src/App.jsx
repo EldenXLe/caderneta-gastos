@@ -16,7 +16,7 @@ import {
   totaisDoAno,
 } from "./gastos";
 import { gerarCSV, lerBackup, montarBackup } from "./backup";
-import { decodificarOFX, lerOFX, sugerirCategoria } from "./ofx";
+import { chaveDaRegra, classificarTipo, decodificarOFX, lerOFX, sugerirCategoria } from "./ofx";
 
 function baixar(nome, conteudo, tipo) {
   const url = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
@@ -28,6 +28,23 @@ function baixar(nome, conteudo, tipo) {
 const CHAVE = "caderneta:gastos";
 const CHAVE_RECORRENTES = "caderneta:recorrentes";
 const CHAVE_ORCAMENTOS = "caderneta:orcamentos";
+const CHAVE_GUARDADO = "caderneta:guardado";
+const CHAVE_REGRAS = "caderneta:regras";
+
+// Tipos da revisão do extrato. Só gasto, investimento e resgate entram na caderneta;
+// fatura e transferência entre contas próprias ficam fora para o mesmo dinheiro não contar duas vezes.
+const TIPOS_SAIDA = [
+  ["gasto", "Gasto"],
+  ["investimento", "Investimento"],
+  ["transferencia", "Transferência entre minhas contas"],
+  ["fatura", "Pagamento de fatura"],
+];
+const TIPOS_ENTRADA = [
+  ["resgate", "Resgate de investimento"],
+  ["ignorar", "Não importar"],
+];
+const IMPORTAVEIS = new Set(["gasto", "investimento", "resgate"]);
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 
 // shortcut: localStorage (~5 MB, uns 30 mil gastos); trocar por IndexedDB ao sincronizar com servidor.
 function carregar(chave) {
@@ -131,6 +148,8 @@ export default function App() {
   const [gastos, setGastos] = useState(() => carregar(CHAVE));
   const [recorrentes, setRecorrentes] = useState(() => carregar(CHAVE_RECORRENTES));
   const [orcamentos, setOrcamentos] = useState(() => carregar(CHAVE_ORCAMENTOS));
+  const [guardado, setGuardado] = useState(() => carregar(CHAVE_GUARDADO));
+  const [regras, setRegras] = useState(() => carregar(CHAVE_REGRAS));
   const [rascunhoLimites, setRascunhoLimites] = useState(null); // null = fora do modo de edição
   const [limitesInvalidos, setLimitesInvalidos] = useState([]);
   const [restauracao, setRestauracao] = useState(null); // backup lido, esperando confirmação
@@ -189,6 +208,10 @@ export default function App() {
   const nomeMes = nomeDoMes(mes).split(" ")[0].toLowerCase();
   const vazio = gastos.length === 0 && recorrentes.length === 0;
   const temExemplo = [gastos, recorrentes, orcamentos].some((lista) => lista.some((x) => x.exemplo));
+  const guardadoMes = guardado.filter((g) => g.data.startsWith(mes)).sort((a, b) => b.data.localeCompare(a.data));
+  const somaGuardado = (direcao) => guardadoMes.filter((g) => g.direcao === direcao).reduce((s, g) => s + g.valor, 0);
+  const aplicadoMes = somaGuardado("aplicacao");
+  const resgatadoMes = somaGuardado("resgate");
   const limitePorCategoria = Object.fromEntries(orcamentos.map((o) => [o.categoria, o.limite]));
 
   function salvar(chave, valor) {
@@ -210,6 +233,14 @@ export default function App() {
   function guardarOrcamentos(novos) {
     setOrcamentos(novos);
     salvar(CHAVE_ORCAMENTOS, novos);
+  }
+  function guardarGuardado(novos) {
+    setGuardado(novos);
+    salvar(CHAVE_GUARDADO, novos);
+  }
+  function guardarRegras(novas) {
+    setRegras(novas);
+    salvar(CHAVE_REGRAS, novas);
   }
 
   const paraCampo = (centavos) => (centavos / 100).toFixed(2).replace(".", ",");
@@ -287,7 +318,7 @@ export default function App() {
   }
 
   function baixarBackup() {
-    baixar(`caderneta-backup-${hoje}.json`, montarBackup({ gastos, recorrentes, orcamentos }), "application/json");
+    baixar(`caderneta-backup-${hoje}.json`, montarBackup({ gastos, recorrentes, orcamentos, guardado, regras }), "application/json");
     setAvisoDados({ tipo: "ok", texto: "Backup baixado. Guarde o arquivo num lugar seguro." });
   }
 
@@ -303,10 +334,12 @@ export default function App() {
   }
 
   function confirmarRestauracao() {
-    const { gastos: g, recorrentes: r, orcamentos: o } = restauracao.dados;
+    const { gastos: g, recorrentes: r, orcamentos: o, guardado: gu, regras: re } = restauracao.dados;
     guardar(g);
     guardarRecorrentes(r);
     guardarOrcamentos(o);
+    guardarGuardado(gu);
+    guardarRegras(re);
     setRestauracao(null);
     setFiltro(null);
     setMes(mesAtual);
@@ -324,34 +357,91 @@ export default function App() {
     if (arquivo.size > 5 * 1024 * 1024) return setAvisoDados({ tipo: "erro", texto: "Arquivo grande demais para um extrato." });
     const lido = lerOFX(decodificarOFX(new Uint8Array(await arquivo.arrayBuffer())));
     if (lido.erro) return setAvisoDados({ tipo: "erro", texto: lido.erro });
-    if (lido.gastos.length === 0) return setAvisoDados({ tipo: "erro", texto: "O extrato só tem entradas, nenhum gasto para importar." });
-    const ids = new Set(gastos.map((g) => g.id));
-    setImportacao({
-      entradas: lido.entradas,
-      itens: lido.gastos
-        .map((g) => {
-          const id = idDoOFX(g.fitid);
-          const jaExiste = ids.has(id);
-          return { ...g, id, jaExiste, marcado: !jaExiste, categoria: sugerirCategoria(g.descricao) };
-        })
-        .sort((a, b) => b.data.localeCompare(a.data)),
-    });
+    const ids = new Set([...gastos, ...guardado].map((g) => g.id));
+    const regraDe = new Map(regras.map((r) => [r.chave, r]));
+    let entradasIgnoradas = 0;
+    const itens = [];
+    for (const [lista, entrada] of [
+      [lido.saidas, false],
+      [lido.entradas, true],
+    ]) {
+      for (const m of lista) {
+        const chave = chaveDaRegra(m.descricao);
+        // Sugestão automática (texto do banco) e, por cima, o que a pessoa já corrigiu antes.
+        const auto = { tipo: classificarTipo(m.descricao, entrada) ?? "ignorar", categoria: sugerirCategoria(m.descricao) };
+        const regra = regraDe.get(chave);
+        const tipo = regra?.tipo ?? auto.tipo;
+        if (entrada && tipo === "ignorar" && !regra) {
+          entradasIgnoradas++; // salário, Pix recebido: não é gasto nem investimento
+          continue;
+        }
+        const id = idDoOFX(m.fitid);
+        const jaExiste = ids.has(id);
+        itens.push({
+          ...m,
+          id,
+          entrada,
+          chave,
+          auto,
+          aprendido: Boolean(regra),
+          tipo,
+          categoria: regra?.categoria ?? auto.categoria,
+          jaExiste,
+          marcado: !jaExiste && IMPORTAVEIS.has(tipo),
+        });
+      }
+    }
+    if (itens.length === 0)
+      return setAvisoDados({ tipo: "erro", texto: "O extrato só tem entradas, nenhum gasto ou investimento para importar." });
+    setImportacao({ entradasIgnoradas, itens: itens.sort((a, b) => b.data.localeCompare(a.data)) });
   }
 
   const mudarItem = (id, mudanca) =>
-    setImportacao((imp) => ({ ...imp, itens: imp.itens.map((i) => (i.id === id ? { ...i, ...mudanca } : i)) }));
+    setImportacao((imp) => ({
+      ...imp,
+      itens: imp.itens.map((i) => {
+        if (i.id !== id) return i;
+        const novo = { ...i, ...mudanca };
+        // Trocar o tipo já marca ou desmarca: fatura e transferência não entram.
+        if ("tipo" in mudanca) novo.marcado = !i.jaExiste && IMPORTAVEIS.has(mudanca.tipo);
+        return novo;
+      }),
+    }));
 
   function confirmarImportacao() {
-    const escolhidos = importacao.itens.filter((i) => i.marcado && !i.jaExiste);
+    const escolhidos = importacao.itens.filter((i) => i.marcado && !i.jaExiste && IMPORTAVEIS.has(i.tipo));
     const agora = Date.now();
-    guardar([
-      ...escolhidos.map(({ id, data, valor, descricao, categoria }, n) => ({ id, data, valor, descricao, categoria, criadoEm: agora - n })),
-      ...gastos,
-    ]);
+    const novosGastos = escolhidos
+      .filter((i) => i.tipo === "gasto")
+      .map(({ id, data, valor, descricao, categoria }, n) => ({ id, data, valor, descricao, categoria, criadoEm: agora - n }));
+    const novosGuardados = escolhidos
+      .filter((i) => i.tipo !== "gasto")
+      .map(({ id, data, valor, descricao, tipo }) => ({ id, data, valor, descricao, direcao: tipo === "resgate" ? "resgate" : "aplicacao" }));
+    if (novosGastos.length) guardar([...novosGastos, ...gastos]);
+    if (novosGuardados.length) guardarGuardado([...novosGuardados, ...guardado]);
+
+    // Aprende com as correções: o que a pessoa mudou vira regra; o que voltou ao automático deixa de ser regra.
+    const novasRegras = new Map(regras.map((r) => [r.chave, r]));
+    let aprendidas = 0;
+    for (const i of importacao.itens) {
+      const corrigido = i.tipo !== i.auto.tipo || (i.tipo === "gasto" && i.categoria !== i.auto.categoria);
+      if (corrigido) {
+        const antes = novasRegras.get(i.chave);
+        if (!antes || antes.tipo !== i.tipo || antes.categoria !== i.categoria) aprendidas++;
+        novasRegras.set(i.chave, { chave: i.chave, tipo: i.tipo, categoria: i.categoria });
+      } else novasRegras.delete(i.chave);
+    }
+    guardarRegras([...novasRegras.values()]);
+
     setImportacao(null);
     setFiltro(null);
-    setMes(escolhidos[0].data.slice(0, 7));
-    setAvisoDados({ tipo: "ok", texto: `${escolhidos.length} ${escolhidos.length === 1 ? "gasto importado" : "gastos importados"} do extrato.` });
+    if (escolhidos.length) setMes(escolhidos[0].data.slice(0, 7));
+    const partes = [];
+    if (novosGastos.length) partes.push(plural(novosGastos.length, "gasto importado", "gastos importados"));
+    if (novosGuardados.length)
+      partes.push(plural(novosGuardados.length, "movimentação de investimento", "movimentações de investimento"));
+    if (aprendidas) partes.push(`${plural(aprendidas, "regra aprendida", "regras aprendidas")} para as próximas importações`);
+    setAvisoDados({ tipo: "ok", texto: `${partes.join(", ") || "Nada importado"}.` });
   }
 
   // Só ao abrir e fechar a revisão (não a cada marcação): foco no botão e Esc para fechar.
@@ -628,6 +718,42 @@ export default function App() {
               </ul>
             )}
           </section>
+
+          {guardado.length > 0 && (
+            <section className="bloco bloco-guardado" aria-labelledby="titulo-guardado">
+              <h2 id="titulo-guardado" className="rotulo">
+                Guardado em {nomeMes}
+              </h2>
+              <p className="guardado-total">{reais(aplicadoMes - resgatadoMes)}</p>
+              <p className="fraco guardado-detalhe">
+                {reais(aplicadoMes)} aplicados · {reais(resgatadoMes)} resgatados. Fica fora das despesas.
+              </p>
+              {guardadoMes.length > 0 && (
+                <ul className="guardado-lista">
+                  {guardadoMes.map((g) => (
+                    <li key={g.id}>
+                      <span className="revisao-data">
+                        {g.data.slice(8)}/{g.data.slice(5, 7)}
+                      </span>
+                      <span className="guardado-descricao">{g.descricao}</span>
+                      <span className={`valor ${g.direcao}`}>
+                        {g.direcao === "resgate" ? "−" : "+"}
+                        {reais(g.valor)}
+                      </span>
+                      <button
+                        type="button"
+                        className="apagar"
+                        onClick={() => guardarGuardado(guardado.filter((x) => x.id !== g.id))}
+                        aria-label={`Apagar ${g.descricao}, ${reais(g.valor)}`}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
 
           <section className="bloco bloco-recorrentes" aria-labelledby="titulo-recorrentes">
             <h2 id="titulo-recorrentes" className="rotulo">
@@ -963,54 +1089,99 @@ export default function App() {
             <header className="revisao-topo">
               <h2 id="titulo-revisao">Revisar o extrato</h2>
               <p className="fraco">
-                {importacao.itens.length} {importacao.itens.length === 1 ? "gasto encontrado" : "gastos encontrados"}
-                {importacao.itens.some((i) => i.jaExiste) &&
-                  ` · ${importacao.itens.filter((i) => i.jaExiste).length} já estavam na caderneta`}
-                {importacao.entradas > 0 &&
-                  ` · ${importacao.entradas} ${importacao.entradas === 1 ? "entrada ignorada" : "entradas ignoradas"}`}
-                . Confira as categorias e desmarque o
-                que não quiser trazer.
+                {(() => {
+                  const conta = (t) => importacao.itens.filter((i) => i.tipo === t).length;
+                  const partes = [
+                    conta("gasto") && plural(conta("gasto"), "gasto", "gastos"),
+                    conta("investimento") && plural(conta("investimento"), "investimento", "investimentos"),
+                    conta("resgate") && plural(conta("resgate"), "resgate", "resgates"),
+                    conta("fatura") && plural(conta("fatura"), "pagamento de fatura", "pagamentos de fatura"),
+                    conta("transferencia") && plural(conta("transferencia"), "transferência entre contas", "transferências entre contas"),
+                    importacao.itens.some((i) => i.jaExiste) &&
+                      `${importacao.itens.filter((i) => i.jaExiste).length} já estavam na caderneta`,
+                    importacao.entradasIgnoradas > 0 &&
+                      plural(importacao.entradasIgnoradas, "entrada ignorada", "entradas ignoradas"),
+                  ].filter(Boolean);
+                  return `${partes.join(" · ")}.`;
+                })()}{" "}
+                Investimentos vão para "Guardado", fora das despesas. Fatura e transferências entre suas contas não entram,
+                para o mesmo dinheiro não contar duas vezes. Suas correções viram regra para os próximos extratos.
               </p>
             </header>
 
             <ul className="revisao-lista">
               {importacao.itens.map((i) => (
-                <li key={i.id} className={i.jaExiste ? "ja-existe" : ""}>
+                <li key={i.id} className={i.jaExiste ? "ja-existe" : IMPORTAVEIS.has(i.tipo) ? "" : "fora"}>
                   <input
                     type="checkbox"
                     checked={i.marcado}
-                    disabled={i.jaExiste}
+                    disabled={i.jaExiste || !IMPORTAVEIS.has(i.tipo)}
                     onChange={(e) => mudarItem(i.id, { marcado: e.target.checked })}
                     aria-label={`Importar ${i.descricao}, ${reais(i.valor)}`}
                   />
                   <span className="revisao-data">
                     {i.data.slice(8)}/{i.data.slice(5, 7)}
                   </span>
-                  <span className="revisao-descricao">{i.descricao}</span>
+                  <span className="revisao-descricao">
+                    {i.descricao}
+                    {i.aprendido && <small className="revisao-regra"> · regra sua</small>}
+                  </span>
                   {i.jaExiste ? (
                     <span className="fraco revisao-ja">já importado</span>
                   ) : (
-                    <select
-                      value={i.categoria}
-                      onChange={(e) => mudarItem(i.id, { categoria: e.target.value })}
-                      aria-label={`Categoria de ${i.descricao}`}
-                      style={{ "--cor": porId[i.categoria].cor }}
-                    >
-                      {CATEGORIAS.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nome}
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      <select
+                        className="revisao-tipo"
+                        value={i.tipo}
+                        onChange={(e) => mudarItem(i.id, { tipo: e.target.value })}
+                        aria-label={`Tipo de ${i.descricao}`}
+                      >
+                        {(i.entrada ? TIPOS_ENTRADA : TIPOS_SAIDA).map(([id, nome]) => (
+                          <option key={id} value={id}>
+                            {nome}
+                          </option>
+                        ))}
+                      </select>
+                      {i.tipo === "gasto" ? (
+                        <select
+                          className="revisao-categoria"
+                          value={i.categoria}
+                          onChange={(e) => mudarItem(i.id, { categoria: e.target.value })}
+                          aria-label={`Categoria de ${i.descricao}`}
+                          style={{ "--cor": porId[i.categoria].cor }}
+                        >
+                          {CATEGORIAS.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.nome}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="revisao-categoria fraco">
+                          {i.tipo === "investimento" ? "vai para Guardado" : i.tipo === "resgate" ? "sai do Guardado" : "não entra"}
+                        </span>
+                      )}
+                    </>
                   )}
-                  <span className="valor">{reais(i.valor)}</span>
+                  <span className="valor">
+                    {i.entrada ? "+" : ""}
+                    {reais(i.valor)}
+                  </span>
                 </li>
               ))}
             </ul>
 
             <footer className="confirmar-acoes revisao-acoes">
               {(() => {
-                const escolhidos = importacao.itens.filter((i) => i.marcado && !i.jaExiste);
+                const escolhidos = importacao.itens.filter((i) => i.marcado && !i.jaExiste && IMPORTAVEIS.has(i.tipo));
+                const nGastos = escolhidos.filter((i) => i.tipo === "gasto").length;
+                const nInvest = escolhidos.length - nGastos;
+                const rotulo = [
+                  nGastos && plural(nGastos, "gasto", "gastos"),
+                  nInvest && plural(nInvest, "movimentação de investimento", "movimentações de investimento"),
+                ]
+                  .filter(Boolean)
+                  .join(" e ");
                 return (
                   <>
                     <button
@@ -1020,8 +1191,7 @@ export default function App() {
                       onClick={confirmarImportacao}
                       disabled={escolhidos.length === 0}
                     >
-                      Importar {escolhidos.length} {escolhidos.length === 1 ? "gasto" : "gastos"} ·{" "}
-                      {reais(escolhidos.reduce((s, i) => s + i.valor, 0))}
+                      {escolhidos.length ? `Importar ${rotulo}` : "Nada marcado"}
                     </button>
                     <button type="button" className="botao-contorno" onClick={() => setImportacao(null)}>
                       Cancelar
